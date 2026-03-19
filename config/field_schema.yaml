@@ -1,0 +1,504 @@
+groups:
+  - name: Demographics
+    description: "Patient demographic information"
+    fields:
+      - key: dob
+        excel_column: 1
+        excel_header: "Demographics: DOB(a)"
+        prompt_hint: "Date of birth. Format: DD/MM/YYYY"
+        type: date
+      - key: initials
+        excel_column: 2
+        excel_header: "Demographics: Initials(b)"
+        prompt_hint: "Patient initials (e.g., AO, BK)"
+        type: string
+      - key: mrn
+        excel_column: 3
+        excel_header: "Demographics: MRN(c)"
+        prompt_hint: "Medical Record Number (numeric)"
+        type: string
+      - key: nhs_number
+        excel_column: 4
+        excel_header: "Demographics: NHS number(d)"
+        prompt_hint: "NHS number (10-digit numeric, may start with NNN)"
+        type: string
+      - key: gender
+        excel_column: 5
+        excel_header: "Demographics: Gender(e)"
+        prompt_hint: "Patient gender: Male or Female"
+        type: string
+      - key: previous_cancer
+        excel_column: 6
+        excel_header: "Demographics: Previous cancer (y, n) if yes, where(f)"
+        prompt_hint: "Previous cancer history: Yes or No"
+        type: string
+      - key: previous_cancer_site
+        excel_column: 7
+        excel_header: "Demographics: State site of previous cancer(f)"
+        prompt_hint: "Site of previous cancer if applicable, or N/A"
+        type: string
+
+  - name: Endoscopy
+    description: "Endoscopy procedure details"
+    fields:
+      - key: endoscopy_date
+        excel_column: 8
+        excel_header: "Endoscopy: date(f)"
+        prompt_hint: "Date of endoscopy procedure. Format: DD/MM/YYYY"
+        type: date
+      - key: endoscopy_type
+        excel_column: 9
+        excel_header: "Endoscopy type: flexi sig, incomplete colonoscopy, colonoscopy complete(f)"
+        prompt_hint: "Type: flexi sig, incomplete colonoscopy, or colonoscopy complete (reaches ileocecal valve)"
+        type: string
+      - key: endoscopy_findings
+        excel_column: 10
+        excel_header: "Endoscopy: Findings(f)"
+        prompt_hint: "Clinical findings from endoscopy as described in notes"
+        type: text
+
+  - name: Histology
+    description: "Biopsy and histology results"
+    fields:
+      - key: biopsy_result
+        excel_column: 11
+        excel_header: "Histology: Biopsy result(g)"
+        prompt_hint: "Histology biopsy result (e.g., ADENOCARCINOMA, NOT OTHERWISE SPECIFIED)"
+        type: text
+      - key: biopsy_date
+        excel_column: 12
+        excel_header: "Histology: Biopsy date(g)"
+        prompt_hint: "Date of biopsy. Format: DD/MM/YYYY"
+        type: date
+      - key: mmr_status
+        excel_column: 13
+        excel_header: "Histology: MMR status(g/h)"
+        prompt_hint: "Mismatch Repair status: Proficient or Deficient"
+        type: string
+
+  - name: Baseline MRI
+    description: "Baseline MRI imaging results"
+    fields:
+      - key: baseline_mri_date
+        excel_column: 14
+        excel_header: "Baseline MRI: date(h)"
+        prompt_hint: "Date of baseline MRI. Format: DD/MM/YYYY"
+        type: date
+      - key: baseline_mri_t
+        excel_column: 15
+        excel_header: "Baseline MRI: mrT(h)"
+        prompt_hint: "MRI tumour staging (mrT): T1, T2, T3, T3a/b/c/d, T4, T4a/b"
+        type: string
+      - key: baseline_mri_n
+        excel_column: 16
+        excel_header: "Baseline MRI: mrN(h)"
+        prompt_hint: "MRI nodal staging (mrN): N0, N1, N2"
+        type: string
+      - key: baseline_mri_emvi
+        excel_column: 17
+        excel_header: "Baseline MRI: mrEMVI(h)"
+        prompt_hint: "Extramural vascular invasion on MRI: Positive or Negative"
+        type: string
+      - key: baseline_mri_crm
+        excel_column: 18
+        excel_header: "Baseline MRI: mrCRM(h)"
+        prompt_hint: "Circumferential resection margin on MRI: Involved, Threatened, or Clear (with distance in mm if stated)"
+        type: string
+      - key: baseline_mri_psw
+        excel_column: 19
+        excel_header: "Baseline MRI: mrPSW(h)"
+        prompt_hint: "Peritoneal sidewall involvement on MRI"
+        type: string
+
+  - name: Baseline CT
+    description: "Baseline CT imaging results"
+    fields:
+      - key: baseline_ct_date
+        excel_column: 20
+        excel_header: "Baseline CT: Date(h)"
+        prompt_hint: "Date of baseline CT. Format: DD/MM/YYYY"
+        type: date
+      - key: baseline_ct_t
+        excel_column: 21
+        excel_header: "Baseline CT: T(h)"
+        prompt_hint: "CT tumour staging (T)"
+        type: string
+      - key: baseline_ct_n
+        excel_column: 22
+        excel_header: "Baseline CT: N(h)"
+        prompt_hint: "CT nodal staging (N)"
+        type: string
+      - key: baseline_ct_emvi
+        excel_column: 23
+        excel_header: "Baseline CT: EMVI(h)"
+        prompt_hint: "Extramural vascular invasion on CT"
+        type: string
+      - key: baseline_ct_m
+        excel_column: 24
+        excel_header: "Baseline CT: M(h)"
+        prompt_hint: "Metastasis staging (M): M0 or M1 (with site if stated)"
+        type: string
+      - key: baseline_ct_incidental
+        excel_column: 25
+        excel_header: "Baseline CT: Incidental findings requiring follow up? Y/N(h)"
+        prompt_hint: "Incidental findings on CT requiring follow-up: Yes or No"
+        type: string
+      - key: baseline_ct_incidental_detail
+        excel_column: 26
+        excel_header: "Baseline CT: Detail incidental finding(h)"
+        prompt_hint: "Description of incidental finding if applicable"
+        type: text
+
+  - name: MDT
+    description: "MDT meeting decisions and treatment planning"
+    fields:
+      - key: first_mdt_date
+        excel_column: 27
+        excel_header: "1st MDT: date(i)"
+        prompt_hint: "Date of first MDT meeting. Format: DD/MM/YYYY"
+        type: date
+      - key: first_mdt_treatment
+        excel_column: 28
+        excel_header: "1st MDT: Treatment approach"
+        prompt_hint: "Treatment approach: TNT, downstaging chemotherapy, downstaging nCRT, downstaging short-course RT, Papillon +/- EBRT, or straight to surgery"
+        type: string
+      - key: mdt_6week_date
+        excel_column: 55
+        excel_header: "MDT (after 6 week): Date"
+        prompt_hint: "Date of MDT meeting after 6-week assessment. Format: DD/MM/YYYY"
+        type: date
+      - key: mdt_6week_decision
+        excel_column: 56
+        excel_header: "MDT (after 6 week): Decision"
+        prompt_hint: "MDT decision after 6-week assessment"
+        type: text
+      - key: mdt_12week_date
+        excel_column: 66
+        excel_header: "MDT (after 12 week): Date"
+        prompt_hint: "Date of MDT meeting after 12-week assessment. Format: DD/MM/YYYY"
+        type: date
+      - key: mdt_12week_decision
+        excel_column: 67
+        excel_header: "MDT (after 12 week): Decision"
+        prompt_hint: "MDT decision after 12-week assessment"
+        type: text
+
+  - name: Chemotherapy
+    description: "Chemotherapy treatment details"
+    fields:
+      - key: chemo_goals
+        excel_column: 29
+        excel_header: "Chemotherapy: Treatment goals (curative, palliative)"
+        prompt_hint: "Treatment goals: curative or palliative"
+        type: string
+      - key: chemo_drugs
+        excel_column: 30
+        excel_header: "Chemotherapy: Drugs"
+        prompt_hint: "Chemotherapy drug names (e.g., FOLFOX, CAPOX, capecitabine)"
+        type: string
+      - key: chemo_cycles
+        excel_column: 31
+        excel_header: "Chemotherapy: Cycles"
+        prompt_hint: "Number of chemotherapy cycles"
+        type: string
+      - key: chemo_dates
+        excel_column: 32
+        excel_header: "Chemotherapy: Dates"
+        prompt_hint: "Start and end dates of chemotherapy"
+        type: string
+      - key: chemo_breaks
+        excel_column: 33
+        excel_header: "Chemotherapy: Breaks"
+        prompt_hint: "Any breaks in chemotherapy treatment and reasons"
+        type: text
+
+  - name: Immunotherapy
+    description: "Immunotherapy treatment details"
+    fields:
+      - key: immuno_dates
+        excel_column: 34
+        excel_header: "Immunotherapy: Dates"
+        prompt_hint: "Dates of immunotherapy treatment"
+        type: string
+      - key: immuno_drug
+        excel_column: 35
+        excel_header: "Immunotherapy"
+        prompt_hint: "Immunotherapy drug name (e.g., pembrolizumab, nivolumab)"
+        type: string
+
+  - name: Radiotherapy
+    description: "Radiotherapy treatment details"
+    fields:
+      - key: radio_total_dose
+        excel_column: 36
+        excel_header: "Radiotherapy: Total dose"
+        prompt_hint: "Total radiotherapy dose in Gy"
+        type: string
+      - key: radio_boost
+        excel_column: 37
+        excel_header: "Radiotherapy: Boost"
+        prompt_hint: "Radiotherapy boost details"
+        type: string
+      - key: radio_dates
+        excel_column: 38
+        excel_header: "Radiotherapy: Dates"
+        prompt_hint: "Start and end dates of radiotherapy"
+        type: string
+      - key: radio_concomitant_chemo
+        excel_column: 39
+        excel_header: "Radiotherapy: Concomitant chemotherapy"
+        prompt_hint: "Concurrent chemotherapy given with radiotherapy: drug name or None"
+        type: string
+
+  - name: CEA and Clinical
+    description: "CEA markers and clinical examination"
+    fields:
+      - key: cea_date
+        excel_column: 40
+        excel_header: "CEA: Date"
+        prompt_hint: "Date of CEA blood test. Format: DD/MM/YYYY"
+        type: date
+      - key: cea_value
+        excel_column: 41
+        excel_header: "CEA: Value"
+        prompt_hint: "CEA value (numeric, in ng/mL or ug/L)"
+        type: string
+      - key: dre_date
+        excel_column: 42
+        excel_header: "CEA: DRE date"
+        prompt_hint: "Date of Digital Rectal Examination. Format: DD/MM/YYYY"
+        type: date
+      - key: dre_finding
+        excel_column: 43
+        excel_header: "CEA: DRE finding"
+        prompt_hint: "Findings from Digital Rectal Examination"
+        type: text
+
+  - name: Surgery
+    description: "Surgical intervention details"
+    fields:
+      - key: defunctioned
+        excel_column: 44
+        excel_header: "Surgery: Defunctioned?"
+        prompt_hint: "Was patient defunctioned (stoma formed)? Yes or No"
+        type: string
+      - key: surgery_date
+        excel_column: 45
+        excel_header: "Surgery: Date of surgery"
+        prompt_hint: "Date of surgery. Format: DD/MM/YYYY"
+        type: date
+      - key: surgery_intent
+        excel_column: 46
+        excel_header: "Surgery: Intent, pre-neoadjuvant therapy"
+        prompt_hint: "Surgical intent and relationship to neoadjuvant therapy"
+        type: text
+
+  - name: Second MRI
+    description: "Second MRI assessment results"
+    fields:
+      - key: second_mri_date
+        excel_column: 47
+        excel_header: "2nd MRI: Date"
+        prompt_hint: "Date of second MRI. Format: DD/MM/YYYY"
+        type: date
+      - key: second_mri_pathway
+        excel_column: 48
+        excel_header: "2nd MRI: Patient pathway status"
+        prompt_hint: "Patient pathway status at time of second MRI"
+        type: string
+      - key: second_mri_t
+        excel_column: 49
+        excel_header: "2nd MRI: mrT"
+        prompt_hint: "MRI tumour staging on second scan (mrT)"
+        type: string
+      - key: second_mri_n
+        excel_column: 50
+        excel_header: "2nd MRI: mrN"
+        prompt_hint: "MRI nodal staging on second scan (mrN)"
+        type: string
+      - key: second_mri_emvi
+        excel_column: 51
+        excel_header: "2nd MRI: mrEMVI"
+        prompt_hint: "Extramural vascular invasion on second MRI"
+        type: string
+      - key: second_mri_crm
+        excel_column: 52
+        excel_header: "2nd MRI: mrCRM"
+        prompt_hint: "Circumferential resection margin on second MRI"
+        type: string
+      - key: second_mri_psw
+        excel_column: 53
+        excel_header: "2nd MRI: mrPSW"
+        prompt_hint: "Peritoneal sidewall involvement on second MRI"
+        type: string
+      - key: second_mri_trg
+        excel_column: 54
+        excel_header: "2nd MRI: mrTRG score"
+        prompt_hint: "Tumour Regression Grade on second MRI (1-5)"
+        type: string
+
+  - name: 12-Week MRI
+    description: "12-week MRI follow-up results"
+    fields:
+      - key: week12_mri_date
+        excel_column: 57
+        excel_header: "12 week MRI: Date"
+        prompt_hint: "Date of 12-week MRI. Format: DD/MM/YYYY"
+        type: date
+      - key: week12_mri_t
+        excel_column: 58
+        excel_header: "12 week MRI: mrT"
+        prompt_hint: "MRI tumour staging at 12 weeks (mrT)"
+        type: string
+      - key: week12_mri_n
+        excel_column: 59
+        excel_header: "12 week MRI: mrN"
+        prompt_hint: "MRI nodal staging at 12 weeks (mrN)"
+        type: string
+      - key: week12_mri_emvi
+        excel_column: 60
+        excel_header: "12 week MRI: mrEMVI"
+        prompt_hint: "Extramural vascular invasion at 12 weeks"
+        type: string
+      - key: week12_mri_crm
+        excel_column: 61
+        excel_header: "12 week MRI: mrCRM"
+        prompt_hint: "Circumferential resection margin at 12 weeks"
+        type: string
+      - key: week12_mri_psw
+        excel_column: 62
+        excel_header: "12 week MRI: mrPSW"
+        prompt_hint: "Peritoneal sidewall involvement at 12 weeks"
+        type: string
+      - key: week12_mri_trg
+        excel_column: 63
+        excel_header: "12 week MRI: mrTRG score"
+        prompt_hint: "Tumour Regression Grade at 12 weeks (1-5)"
+        type: string
+
+  - name: Follow-up Flex Sig
+    description: "Follow-up flexible sigmoidoscopy"
+    fields:
+      - key: flexsig_date
+        excel_column: 64
+        excel_header: "Flex sig: Date"
+        prompt_hint: "Date of follow-up flexible sigmoidoscopy. Format: DD/MM/YYYY"
+        type: date
+      - key: flexsig_findings
+        excel_column: 65
+        excel_header: "Flex sig: Findings"
+        prompt_hint: "Findings from follow-up flexible sigmoidoscopy"
+        type: text
+
+  - name: Watch and Wait
+    description: "Watch and wait surveillance programme"
+    fields:
+      - key: ww_entered_date
+        excel_column: 68
+        excel_header: "Watch and wait: Entered watch + wait, date of MDT?"
+        prompt_hint: "Date of MDT where watch and wait was decided. Format: DD/MM/YYYY"
+        type: date
+      - key: ww_reason
+        excel_column: 69
+        excel_header: "Watch and wait: Why did they enter wait (with what intent)"
+        prompt_hint: "Reason for entering watch and wait (e.g., complete clinical response)"
+        type: text
+      - key: ww_frequency
+        excel_column: 70
+        excel_header: "Watch and wait: Frequency?"
+        prompt_hint: "Frequency of watch and wait surveillance (e.g., 3-monthly, 6-monthly)"
+        type: string
+      - key: ww_progression_date
+        excel_column: 71
+        excel_header: "Watch and wait: Date of progression"
+        prompt_hint: "Date of disease progression if applicable. Format: DD/MM/YYYY"
+        type: date
+      - key: ww_progression_site
+        excel_column: 72
+        excel_header: "Watch and wait: Site of progression"
+        prompt_hint: "Site of disease progression (e.g., local, liver, lung)"
+        type: string
+      - key: ww_death_date
+        excel_column: 73
+        excel_header: "Watch and wait: Date of death"
+        prompt_hint: "Date of death if applicable. Format: DD/MM/YYYY"
+        type: date
+
+  - name: Watch and Wait Dates
+    description: "Longitudinal watch and wait surveillance dates (MRI and flexisigmoidoscopy)"
+    fields:
+      - key: ww_start_date
+        excel_column: 74
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: Date entered watch and wait"
+        prompt_hint: "Date entered watch and wait programme. Format: DD/MM/YYYY"
+        type: date
+      - key: ww_flexi_1_date
+        excel_column: 75
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: Flexisigmoidoscopy date"
+        prompt_hint: "1st flexisigmoidoscopy date in watch and wait. Format: DD/MM/YYYY"
+        type: date
+      - key: ww_flexi_1_due
+        excel_column: 76
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: Due date next"
+        prompt_hint: "Due date for next flexisigmoidoscopy after 1st"
+        type: date
+      - key: ww_flexi_2_date
+        excel_column: 77
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: Flexisigmoidoscopy date"
+        prompt_hint: "2nd flexisigmoidoscopy date. Format: DD/MM/YYYY"
+        type: date
+      - key: ww_flexi_2_due
+        excel_column: 78
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: Due date next"
+        prompt_hint: "Due date for next flexisigmoidoscopy after 2nd"
+        type: date
+      - key: ww_flexi_3_date
+        excel_column: 79
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: Flexisigmoidoscopy date"
+        prompt_hint: "3rd flexisigmoidoscopy date. Format: DD/MM/YYYY"
+        type: date
+      - key: ww_flexi_3_due
+        excel_column: 80
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: Due date next"
+        prompt_hint: "Due date for next flexisigmoidoscopy after 3rd"
+        type: date
+      - key: ww_flexi_4_date
+        excel_column: 81
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: Flexisigmoidoscopy date"
+        prompt_hint: "4th flexisigmoidoscopy date. Format: DD/MM/YYYY"
+        type: date
+      - key: ww_flexi_4_due
+        excel_column: 82
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: Due date next"
+        prompt_hint: "Due date for next flexisigmoidoscopy after 4th"
+        type: date
+      - key: ww_mri_1_date
+        excel_column: 83
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: MRI Date"
+        prompt_hint: "1st MRI date in watch and wait. Format: DD/MM/YYYY"
+        type: date
+      - key: ww_mri_1_due
+        excel_column: 84
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: Due date next"
+        prompt_hint: "Due date for next MRI after 1st"
+        type: date
+      - key: ww_mri_2_date
+        excel_column: 85
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: MRI Date"
+        prompt_hint: "2nd MRI date in watch and wait. Format: DD/MM/YYYY"
+        type: date
+      - key: ww_mri_2_due
+        excel_column: 86
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: Due date next"
+        prompt_hint: "Due date for next MRI after 2nd"
+        type: date
+      - key: ww_mri_3_date
+        excel_column: 87
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: MRI Date"
+        prompt_hint: "3rd MRI date in watch and wait. Format: DD/MM/YYYY"
+        type: date
+      - key: ww_mri_3_due
+        excel_column: 88
+        excel_header: "MRI and flexisigmoidoscopy watch and wait dates: Due date next"
+        prompt_hint: "Due date for next MRI after 3rd"
+        type: date

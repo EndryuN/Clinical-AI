@@ -1,0 +1,38 @@
+<!-- templates/index.html -->
+{% extends "base.html" %}
+{% block title %}MDT Extractor — Upload{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6 text-center">
+        <h1 class="mb-2">MDT Data Extractor</h1>
+        <p class="text-muted mb-4">Upload your MDT outcome proforma to extract structured patient data</p>
+
+        {% if not ollama_ok %}
+        <div class="alert alert-warning mb-4">
+            <strong>Warning:</strong> Ollama is not running or the model is not available.
+            Start Ollama with <code>ollama serve</code> and pull the model with <code>ollama pull llama3.1:8b</code>.
+        </div>
+        {% endif %}
+
+        <div id="upload-zone" class="border border-secondary border-2 rounded-3 p-5"
+             style="border-style: dashed !important; cursor: pointer;">
+            <div class="fs-1 mb-3">&#x1f4c4;</div>
+            <p class="text-primary fw-bold mb-1">Drag &amp; drop your .docx file here</p>
+            <p class="text-muted small">or click to browse</p>
+            <input type="file" id="file-input" accept=".docx" class="d-none">
+        </div>
+
+        <p class="text-muted small mt-3">&#x1f512; All processing happens locally &mdash; no data leaves your machine</p>
+
+        {% if error %}
+        <div class="alert alert-danger mt-3">{{ error }}</div>
+        {% endif %}
+
+        <div id="upload-error" class="alert alert-danger mt-3 d-none"></div>
+        <div id="upload-spinner" class="mt-3 d-none">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="text-muted mt-2">Parsing document...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,94 @@
+<!-- templates/analytics.html -->
+{% extends "base.html" %}
+{% block title %}MDT Extractor — Analytics{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+{% block content %}
+<div class="row mt-3">
+    <div class="col-12 mb-3">
+        <h4 class="text-muted">Extraction Analytics</h4>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-dark border-secondary">
+            <div class="card-body">
+                <h6 class="card-title text-muted">Cancer Type Distribution</h6>
+                <canvas id="cancer-chart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-dark border-secondary">
+            <div class="card-body">
+                <h6 class="card-title text-muted">Treatment Approaches</h6>
+                <canvas id="treatment-chart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-dark border-secondary">
+            <div class="card-body">
+                <h6 class="card-title text-muted">Extraction Confidence</h6>
+                <canvas id="confidence-chart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+fetch('/analytics')
+    .then(r => r.json())
+    .then(data => {
+        // Cancer types
+        new Chart(document.getElementById('cancer-chart'), {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(data.cancer_types || {}),
+                datasets: [{
+                    data: Object.values(data.cancer_types || {}),
+                    backgroundColor: ['#58a6ff', '#3fb950', '#d29922', '#f85149']
+                }]
+            },
+            options: { plugins: { legend: { labels: { color: '#8b949e' }}}}
+        });
+
+        // Treatments
+        new Chart(document.getElementById('treatment-chart'), {
+            type: 'bar',
+            data: {
+                labels: Object.keys(data.treatments || {}),
+                datasets: [{
+                    label: 'Patients',
+                    data: Object.values(data.treatments || {}),
+                    backgroundColor: '#58a6ff'
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false }},
+                scales: {
+                    x: { ticks: { color: '#8b949e' }},
+                    y: { ticks: { color: '#8b949e' }, beginAtZero: true }
+                }
+            }
+        });
+
+        // Confidence
+        const conf = data.confidence || {};
+        new Chart(document.getElementById('confidence-chart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['High', 'Medium', 'Low'],
+                datasets: [{
+                    data: [conf.high || 0, conf.medium || 0, conf.low || 0],
+                    backgroundColor: ['#238636', '#9e6a03', '#da3633']
+                }]
+            },
+            options: { plugins: { legend: { labels: { color: '#8b949e' }}}}
+        });
+    })
+    .catch(err => {
+        console.error('Failed to load analytics:', err);
+    });
+</script>
+{% endblock %}

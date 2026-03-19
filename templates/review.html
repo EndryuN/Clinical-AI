@@ -1,0 +1,73 @@
+<!-- templates/review.html -->
+{% extends "base.html" %}
+{% block title %}MDT Extractor — Review{% endblock %}
+{% block content %}
+<div class="row" style="height: calc(100vh - 80px);">
+    <!-- Patient Sidebar -->
+    <div class="col-md-2 border-end border-secondary overflow-auto p-2">
+        <div class="mb-2">
+            <input type="text" class="form-control form-control-sm bg-dark text-light"
+                   placeholder="Search patient..." onkeyup="loadPatients({search: this.value})">
+        </div>
+        <div class="mb-2">
+            <select class="form-select form-select-sm bg-dark text-light"
+                    onchange="loadPatients({cancer_type: this.value})">
+                <option value="">All Cancer Types</option>
+                <option value="Colorectal">Colorectal</option>
+                <option value="Unknown">Unknown</option>
+            </select>
+        </div>
+        <div id="patient-list">
+            <p class="text-muted small text-center mt-3">Loading patients...</p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="col-md-10 d-flex flex-column">
+        <!-- Group Tabs + Confidence Filter -->
+        <div class="d-flex align-items-center border-bottom border-secondary">
+            <ul class="nav nav-tabs flex-grow-1 border-0" id="group-tabs">
+                <li class="nav-item">
+                    <span class="nav-link text-muted">Select a patient to view data</span>
+                </li>
+            </ul>
+            <div class="px-3">
+                <select class="form-select form-select-sm bg-dark text-light" style="width:auto"
+                        onchange="filterConfidence(this.value)">
+                    <option value="">All Confidence</option>
+                    <option value="low">Low Only</option>
+                    <option value="medium,low">Medium + Low</option>
+                    <option value="high">High Only</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Field Table -->
+        <div class="flex-grow-1 overflow-auto p-3">
+            <table class="table table-dark table-sm table-hover">
+                <thead>
+                    <tr>
+                        <th style="width:30%">Field</th>
+                        <th style="width:50%">Value</th>
+                        <th style="width:20%" class="text-center">Confidence</th>
+                    </tr>
+                </thead>
+                <tbody id="field-table-body">
+                    <tr><td colspan="3" class="text-muted text-center py-4">Select a patient from the sidebar</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Source Text Panel -->
+        <div class="border-top border-secondary p-3" style="max-height: 150px; overflow-y: auto;">
+            <div class="text-muted small text-uppercase mb-1">Source Text</div>
+            <pre id="source-text" class="text-muted small mb-0" style="white-space: pre-wrap;">Select a patient to view source text</pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => loadPatients());
+</script>
+{% endblock %}

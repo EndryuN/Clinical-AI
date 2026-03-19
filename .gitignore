@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+data/
+logs/
+.superpowers/
+*.egg-info/
+dist/
+build/

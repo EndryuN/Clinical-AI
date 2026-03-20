@@ -30,8 +30,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function uploadFile(file) {
-    if (!file.name.endsWith('.docx')) {
-        showUploadError('Only .docx files are supported.');
+    if (!file.name.endsWith('.docx') && !file.name.endsWith('.xlsx')) {
+        showUploadError('Only .docx and .xlsx files are supported.');
         return;
     }
 
@@ -52,10 +52,16 @@ function uploadFile(file) {
                 showUploadError(data.error);
                 return;
             }
-            // Store data and redirect to process page
+            // Store data and redirect
             sessionStorage.setItem('upload_result', JSON.stringify(data));
             sessionStorage.setItem('file_name', file.name);
-            window.location.href = '/process';
+            if (data.imported) {
+                // Excel import — skip extraction, go straight to review
+                window.location.href = '/review';
+            } else {
+                // DOCX upload — go to process page for extraction
+                window.location.href = '/process';
+            }
         })
         .catch(err => {
             if (spinner) spinner.classList.add('d-none');
@@ -92,10 +98,14 @@ function startExtraction() {
     const progressSection = document.getElementById('progress-section');
     if (progressSection) progressSection.classList.remove('d-none');
 
+    const limitInput = document.getElementById('patient-limit');
+    const limit = limitInput && limitInput.value ? parseInt(limitInput.value) : null;
+    const body = limit ? JSON.stringify({limit: limit}) : '{}';
+
     fetch('/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: '{}'
+        body: body
     })
         .then(r => r.json())
         .then(() => listenProgress())
@@ -178,6 +188,12 @@ if (document.getElementById('parse-result')) {
 // ===== Review Page Functions =====
 let currentPatientId = null;
 let currentGroup = null;
+let schemaGroups = {};  // {groupName: {color: "#...", fields: [...]}}
+
+// Load schema colours on page load
+fetch('/schema').then(r => r.json()).then(groups => {
+    groups.forEach(g => { schemaGroups[g.name] = {color: g.color, fields: g.fields}; });
+}).catch(() => {});
 let confidenceFilter = '';
 let allPatientExtractions = {};
 
@@ -189,7 +205,26 @@ function loadPatients(filters) {
 
     fetch(url)
         .then(r => r.json())
-        .then(data => renderPatientList(data.patients || []));
+        .then(data => {
+            renderPatientList(data.patients || []);
+            // Populate cancer type dropdown dynamically (only if not filtered)
+            if (!filters.cancer_type) {
+                const types = new Set();
+                (data.patients || []).forEach(p => { if (p.cancer_type) types.add(p.cancer_type); });
+                const select = document.getElementById('cancer-type-filter');
+                if (select) {
+                    const current = select.value;
+                    select.innerHTML = '<option value="">All Cancer Types</option>';
+                    [...types].sort().forEach(t => {
+                        const opt = document.createElement('option');
+                        opt.value = t;
+                        opt.textContent = t;
+                        if (t === current) opt.selected = true;
+                        select.appendChild(opt);
+                    });
+                }
+            }
+        });
 }
 
 function renderPatientList(patients) {
@@ -231,8 +266,22 @@ function selectPatient(patientId) {
             // Store extractions for re-rendering on filter change
             allPatientExtractions = data.extractions || {};
 
-            // Set first group as active if none selected or group not in this patient
-            const groups = Object.keys(allPatientExtractions);
+            // Use schema order, but push completely empty tabs to the end
+            const schemaOrder = Object.keys(schemaGroups);
+            const allGroups = schemaOrder.length > 0
+                ? schemaOrder.filter(g => g in allPatientExtractions)
+                : Object.keys(allPatientExtractions);
+
+            const hasData = g => {
+                const fields = allPatientExtractions[g];
+                if (!fields) return false;
+                return Object.values(fields).some(fr => fr.value !== null && fr.value !== undefined && fr.value !== '');
+            };
+            const groups = [
+                ...allGroups.filter(g => hasData(g)),
+                ...allGroups.filter(g => !hasData(g))
+            ];
+
             if (!currentGroup || !groups.includes(currentGroup)) {
                 currentGroup = groups[0] || null;
             }
@@ -252,19 +301,64 @@ function renderGroupTabs(groups) {
     const tabs = document.getElementById('group-tabs');
     if (!tabs) return;
 
-    tabs.innerHTML = groups.map(g => `
-        <li class="nav-item">
-            <a class="nav-link ${g === currentGroup ? 'active' : ''}" href="#"
+    const hasData = g => {
+        const fields = allPatientExtractions[g];
+        if (!fields) return false;
+        return Object.values(fields).some(fr => fr.value !== null && fr.value !== undefined && fr.value !== '');
+    };
+
+    let dividerInserted = false;
+    let html = '';
+
+    for (const g of groups) {
+        const groupHasData = hasData(g);
+
+        // Insert divider before the first empty tab
+        if (!groupHasData && !dividerInserted) {
+            dividerInserted = true;
+            html += `
+            <li class="nav-item d-flex align-items-center" style="margin: 2px 8px;">
+                <span style="color: #555; font-size: 11px; white-space: nowrap; font-style: italic;">No data &#x27A1;</span>
+            </li>`;
+        }
+
+        const schema = schemaGroups[g] || {};
+        const color = schema.color || '#D9D9D9';
+        const isActive = g === currentGroup;
+        const opacity = isActive ? '1' : groupHasData ? '0.7' : '0.35';
+        const border = isActive ? 'border: 2px solid #fff;' : 'border: 1px solid rgba(255,255,255,0.2);';
+        const fontWeight = isActive ? 'font-weight: 700;' : '';
+        html += `
+        <li class="nav-item" style="margin: 2px;">
+            <a class="nav-link" href="#"
+               style="background-color: ${color}; opacity: ${opacity}; color: #000; ${border} ${fontWeight}
+                      border-radius: 6px; padding: 5px 12px; font-size: 12px;"
                onclick="switchGroup('${g}'); return false;">${g}</a>
-        </li>
-    `).join('');
+        </li>`;
+    }
+
+    tabs.innerHTML = html;
 }
 
 function switchGroup(group) {
     currentGroup = group;
 
-    // Re-render tabs to update active state
-    renderGroupTabs(Object.keys(allPatientExtractions));
+    // Re-render tabs: schema order, empty tabs at end
+    const schemaOrder = Object.keys(schemaGroups);
+    const allGroups = schemaOrder.length > 0
+        ? schemaOrder.filter(g => g in allPatientExtractions)
+        : Object.keys(allPatientExtractions);
+
+    const hasData = g => {
+        const fields = allPatientExtractions[g];
+        if (!fields) return false;
+        return Object.values(fields).some(fr => fr.value !== null && fr.value !== undefined && fr.value !== '');
+    };
+    const groups = [
+        ...allGroups.filter(g => hasData(g)),
+        ...allGroups.filter(g => !hasData(g))
+    ];
+    renderGroupTabs(groups);
 
     // Render the selected group's fields
     if (allPatientExtractions[group]) {
@@ -278,31 +372,54 @@ function renderFieldTable(fields, groupName) {
 
     const allowedConf = confidenceFilter ? confidenceFilter.split(',') : null;
 
+    // Show ALL fields — including empty ones so users can populate them
     const entries = Object.entries(fields)
-        .filter(([key, fr]) => !allowedConf || allowedConf.includes(fr.confidence));
+        .filter(([key, fr]) => {
+            if (!allowedConf) return true;
+            // When filtering by confidence, still show empty fields (they might need populating)
+            if (fr.confidence === 'none' && !fr.value) return !allowedConf;
+            return allowedConf.includes(fr.confidence);
+        });
 
     if (entries.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-muted text-center py-3">No fields match the current confidence filter</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="text-muted text-center py-3">No fields in this category</td></tr>';
         return;
     }
 
+    const groupColor = (schemaGroups[groupName] || {}).color || '#D9D9D9';
+
     tbody.innerHTML = entries.map(([key, fr]) => {
-        const confClass = fr.confidence === 'high' ? 'success' :
-                          fr.confidence === 'medium' ? 'warning' : 'danger';
-        const confText = (fr.confidence || 'low').toUpperCase();
+        const hasValue = fr.value !== null && fr.value !== undefined && fr.value !== '';
+        const reason = (fr.reason || '').toLowerCase();
+        const isInferred = hasValue && (fr.confidence === 'medium' || reason.includes('infer'));
+
+        const confClass = !hasValue ? 'secondary' :
+                          isInferred ? 'info' :
+                          fr.confidence === 'high' ? 'success' :
+                          fr.confidence === 'medium' ? 'warning' :
+                          fr.confidence === 'none' ? 'secondary' : 'danger';
+        const confText = !hasValue ? 'EMPTY' :
+                         isInferred ? 'INFERRED' :
+                         fr.confidence === 'none' ? 'N/A' : (fr.confidence || 'low').toUpperCase();
         const safeValue = (fr.value || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const editedBadge = fr.edited ? '<span class="badge bg-info ms-1" style="font-size:9px">EDITED</span>' : '';
+        const safeReason = (fr.reason || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const inputBorder = isInferred ? 'border-color: #0dcaf0 !important;' : '';
+        const rowBg = isInferred ? 'background-color: rgba(13, 202, 240, 0.05);' : '';
         return `
-        <tr>
-            <td class="text-muted small">${key}</td>
+        <tr style="border-left: 4px solid ${groupColor}; ${rowBg}">
+            <td class="small" style="color: ${hasValue ? '#c9d1d9' : '#555'};">${key}</td>
             <td>
                 <input type="text" class="form-control form-control-sm bg-dark text-light border-${confClass}"
-                       value="${safeValue}"
+                       value="${safeValue}" placeholder="${hasValue ? '' : 'Enter value...'}"
+                       style="${inputBorder}"
                        onchange="editField('${groupName}', '${key}', this.value)">
             </td>
-            <td class="text-center">
-                <span class="badge bg-${confClass}">${confText}</span>
+            <td class="text-center" style="min-width: 140px;">
+                <span class="badge bg-${confClass}" style="font-size:10px; cursor:help;"
+                      title="${safeReason}">${confText}</span>
                 ${editedBadge}
+                ${safeReason && confText !== 'EMPTY' && confText !== 'N/A' ? '<div class="text-muted mt-1" style="font-size:9px; line-height:1.2;">' + safeReason + '</div>' : ''}
             </td>
         </tr>`;
     }).join('');
@@ -330,7 +447,10 @@ function editField(group, field, newValue) {
                 if (allPatientExtractions[group] && allPatientExtractions[group][field]) {
                     allPatientExtractions[group][field].value = newValue;
                     allPatientExtractions[group][field].edited = true;
+                    allPatientExtractions[group][field].confidence = newValue ? 'high' : 'none';
                 }
+                // Re-sort tabs in case an empty tab now has data
+                switchGroup(currentGroup);
             }
         })
         .catch(err => console.error('Edit failed:', err));

@@ -19,6 +19,7 @@
                 <a class="nav-link" href="/review">Review</a>
                 <a class="nav-link" href="/analytics-page">Analytics</a>
                 <a class="btn btn-success btn-sm ms-2" href="/export">Export Excel</a>
+                <button class="btn btn-outline-danger btn-sm ms-2" onclick="if(confirm('Wipe all data and start over?')){fetch('/reset',{method:'POST'}).then(()=>window.location='/')}">Reset</button>
                 {% endif %}
             </div>
         </div>

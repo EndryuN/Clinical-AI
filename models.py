@@ -5,6 +5,7 @@ from typing import Optional
 class FieldResult:
     value: Optional[str] = None
     confidence: str = "low"
+    reason: str = ""
     edited: bool = False
     original_value: Optional[str] = None
 

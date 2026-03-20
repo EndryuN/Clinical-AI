@@ -34,13 +34,161 @@
         </div>
     </div>
 </div>
+
+<!-- Column Analysis Section -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card bg-dark border-secondary">
+            <div class="card-body">
+                <h5 class="text-muted mb-3">Column Analysis</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <label class="text-muted small mb-1">Select a field to analyse:</label>
+                        <select id="column-select" class="form-select bg-dark text-light border-secondary"
+                                onchange="analyseColumn(this.value)">
+                            <option value="">-- Choose a field --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8" id="column-results" style="display:none;">
+                        <div class="row mt-2">
+                            <!-- Summary stats -->
+                            <div class="col-md-6">
+                                <div class="card bg-black border-secondary">
+                                    <div class="card-body">
+                                        <h6 class="text-muted mb-3" id="stats-title">Statistics</h6>
+                                        <table class="table table-dark table-sm mb-0">
+                                            <tbody id="stats-table"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Value distribution chart -->
+                            <div class="col-md-6">
+                                <div class="card bg-black border-secondary">
+                                    <div class="card-body">
+                                        <h6 class="text-muted mb-3">Value Distribution</h6>
+                                        <canvas id="column-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
+// Load schema for the column dropdown
+fetch('/schema')
+    .then(r => r.json())
+    .then(groups => {
+        const select = document.getElementById('column-select');
+        groups.forEach(g => {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = g.name;
+            optgroup.style.color = g.color;
+            g.fields.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f;
+                opt.textContent = f;
+                optgroup.appendChild(opt);
+            });
+            select.appendChild(optgroup);
+        });
+    });
+
+let columnChart = null;
+
+function analyseColumn(fieldKey) {
+    if (!fieldKey) {
+        document.getElementById('column-results').style.display = 'none';
+        return;
+    }
+
+    fetch(`/analytics/column/${fieldKey}`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('column-results').style.display = 'block';
+            document.getElementById('stats-title').textContent = `Statistics: ${data.field}`;
+
+            // Build stats table
+            let rows = `
+                <tr><td class="text-muted">Total patients</td><td class="text-end">${data.total_patients}</td></tr>
+                <tr><td class="text-muted">Populated</td><td class="text-end">${data.populated}</td></tr>
+                <tr><td class="text-muted">Empty</td><td class="text-end">${data.empty}</td></tr>
+                <tr><td class="text-muted">Unique values</td><td class="text-end">${data.unique_values}</td></tr>
+            `;
+
+            if (data.numeric) {
+                rows += `
+                    <tr><td colspan="2" class="text-center text-muted small pt-2">Numeric Analysis</td></tr>
+                    <tr><td class="text-muted">Mean</td><td class="text-end fw-bold text-primary">${data.mean}</td></tr>
+                    <tr><td class="text-muted">Std Deviation</td><td class="text-end fw-bold text-warning">${data.std_dev}</td></tr>
+                    <tr><td class="text-muted">Min</td><td class="text-end">${data.min}</td></tr>
+                    <tr><td class="text-muted">Max</td><td class="text-end">${data.max}</td></tr>
+                    <tr><td class="text-muted">Numeric count</td><td class="text-end">${data.count}</td></tr>
+                `;
+            }
+
+            document.getElementById('stats-table').innerHTML = rows;
+
+            // Build distribution chart
+            if (columnChart) columnChart.destroy();
+
+            let dist = data.value_distribution || {};
+            let chartLabels = Object.keys(dist);
+            let chartValues = Object.values(dist);
+
+            // If numeric with many unique values, bucket into ranges for a histogram
+            if (data.numeric && chartLabels.length > 10) {
+                const nums = chartLabels.map(Number).sort((a, b) => a - b);
+                const min = nums[0], max = nums[nums.length - 1];
+                const bucketSize = Math.ceil((max - min) / 8) || 1;
+                const buckets = {};
+                for (const [val, count] of Object.entries(dist)) {
+                    const n = Number(val);
+                    const bucketStart = Math.floor((n - min) / bucketSize) * bucketSize + min;
+                    const label = `${bucketStart}-${bucketStart + bucketSize - 1}`;
+                    buckets[label] = (buckets[label] || 0) + count;
+                }
+                chartLabels = Object.keys(buckets);
+                chartValues = Object.values(buckets);
+            }
+
+            // Truncate long labels
+            const displayLabels = chartLabels.map(l => l.length > 30 ? l.substring(0, 30) + '...' : l);
+            const horizontal = chartLabels.length > 8;
+
+            columnChart = new Chart(document.getElementById('column-chart'), {
+                type: 'bar',
+                data: {
+                    labels: displayLabels,
+                    datasets: [{
+                        label: 'Count',
+                        data: chartValues,
+                        backgroundColor: '#58a6ff'
+                    }]
+                },
+                options: {
+                    indexAxis: horizontal ? 'y' : 'x',
+                    plugins: { legend: { display: false }},
+                    scales: {
+                        x: { ticks: { color: '#8b949e' }, beginAtZero: true },
+                        y: { ticks: { color: '#8b949e', font: { size: 10 } } }
+                    }
+                }
+            });
+        })
+        .catch(err => console.error('Column analysis failed:', err));
+}
+
+// Existing charts
 fetch('/analytics')
     .then(r => r.json())
     .then(data => {
-        // Cancer types
         new Chart(document.getElementById('cancer-chart'), {
             type: 'doughnut',
             data: {
@@ -53,7 +201,6 @@ fetch('/analytics')
             options: { plugins: { legend: { labels: { color: '#8b949e' }}}}
         });
 
-        // Treatments
         new Chart(document.getElementById('treatment-chart'), {
             type: 'bar',
             data: {
@@ -73,7 +220,6 @@ fetch('/analytics')
             }
         });
 
-        // Confidence
         const conf = data.confidence || {};
         new Chart(document.getElementById('confidence-chart'), {
             type: 'doughnut',
@@ -87,8 +233,6 @@ fetch('/analytics')
             options: { plugins: { legend: { labels: { color: '#8b949e' }}}}
         });
     })
-    .catch(err => {
-        console.error('Failed to load analytics:', err);
-    });
+    .catch(err => console.error('Failed to load analytics:', err));
 </script>
 {% endblock %}

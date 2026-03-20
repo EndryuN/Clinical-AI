@@ -128,6 +128,40 @@ def _table_to_text(table) -> str:
 # Public API
 # ---------------------------------------------------------------------------
 
+_MDT_DATE_RE = re.compile(
+    r'Multidisciplinary.*?Meeting\s+(\d{2}/\d{2}/\d{4})', re.IGNORECASE
+)
+
+
+_MDT_HEADER_RE = re.compile(
+    r'(\w[\w\s]*?)\s*Multidisciplinary.*?Meeting\s+(\d{2}/\d{2}/\d{4})', re.IGNORECASE
+)
+
+
+def _extract_mdt_headers(doc) -> list[dict]:
+    """Extract MDT meeting dates and cancer types from paragraph headers.
+
+    The document has one paragraph header per patient like:
+    'Colorectal Multidisciplinary Meeting 07/03/2025(i)'
+    """
+    headers = []
+    for para in doc.paragraphs:
+        m = _MDT_HEADER_RE.search(para.text)
+        if m:
+            headers.append({
+                "cancer_type": m.group(1).strip(),
+                "date": m.group(2)
+            })
+        elif _MDT_DATE_RE.search(para.text):
+            # Fallback: date found but no cancer type prefix
+            dm = _MDT_DATE_RE.search(para.text)
+            headers.append({
+                "cancer_type": "Unknown",
+                "date": dm.group(1)
+            })
+    return headers
+
+
 def parse_docx(file_path: str) -> list[PatientBlock]:
     """
     Parse a MDT outcome proformas .docx file and return one PatientBlock
@@ -135,9 +169,13 @@ def parse_docx(file_path: str) -> list[PatientBlock]:
 
     Splitting strategy: each top-level table in the document represents one
     patient (confirmed by document inspection: 50 tables, 50 patients).
+    The MDT date comes from the paragraph header before each table.
     """
     doc = Document(file_path)
     patients: list[PatientBlock] = []
+
+    # Extract MDT dates and cancer types from paragraph headers (one per patient)
+    mdt_headers = _extract_mdt_headers(doc)
 
     for idx, table in enumerate(doc.tables):
         rows = table.rows
@@ -156,6 +194,14 @@ def parse_docx(file_path: str) -> list[PatientBlock]:
             patient_id = f"PATIENT_{idx + 1:03d}"
 
         raw_text = _table_to_text(table)
+
+        # Prepend the MDT meeting info to the raw text so the LLM can extract it
+        mdt_header = mdt_headers[idx] if idx < len(mdt_headers) else {}
+        mdt_date = mdt_header.get("date", "")
+        cancer_type = mdt_header.get("cancer_type", "")
+        if mdt_date or cancer_type:
+            prefix = f"Cancer Type: {cancer_type}\nMDT Meeting Date: {mdt_date}"
+            raw_text = f"{prefix}\n\n{raw_text}"
 
         patients.append(PatientBlock(
             id=patient_id,

@@ -7,19 +7,58 @@
         <h1 class="mb-2">MDT Data Extractor</h1>
         <p class="text-muted mb-4">Upload your MDT outcome proforma to extract structured patient data</p>
 
-        {% if not ollama_ok %}
-        <div class="alert alert-warning mb-4">
-            <strong>Warning:</strong> Ollama is not running or the model is not available.
-            Start Ollama with <code>ollama serve</code> and pull the model with <code>ollama pull llama3.1:8b</code>.
+        <!-- Backend Selection -->
+        <div class="card bg-dark border-secondary mb-4">
+            <div class="card-body">
+                <h6 class="text-muted mb-3">Choose LLM Backend</h6>
+                <div class="d-flex justify-content-center gap-3">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="backend" id="backend-claude"
+                               value="claude" {{ 'checked' if current_backend == 'claude' else '' }}
+                               {{ 'disabled' if not claude_available else '' }}
+                               onchange="switchBackend('claude')">
+                        <label class="form-check-label" for="backend-claude">
+                            Claude API
+                            {% if claude_available %}
+                            <span class="badge bg-success ms-1">Ready</span>
+                            {% else %}
+                            <span class="badge bg-secondary ms-1">No API key</span>
+                            {% endif %}
+                        </label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="backend" id="backend-ollama"
+                               value="ollama" {{ 'checked' if current_backend == 'ollama' else '' }}
+                               {{ 'disabled' if not ollama_available else '' }}
+                               onchange="switchBackend('ollama')">
+                        <label class="form-check-label" for="backend-ollama">
+                            Local LLM (Ollama)
+                            {% if ollama_available %}
+                            <span class="badge bg-success ms-1">Ready</span>
+                            {% else %}
+                            <span class="badge bg-secondary ms-1">Not running</span>
+                            {% endif %}
+                        </label>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <small id="backend-info" class="text-muted">
+                        {% if current_backend == 'claude' %}
+                        Using Claude Haiku API — fast, requires internet
+                        {% else %}
+                        Using Ollama locally — slower, fully private
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
         </div>
-        {% endif %}
 
         <div id="upload-zone" class="border border-secondary border-2 rounded-3 p-5"
              style="border-style: dashed !important; cursor: pointer;">
             <div class="fs-1 mb-3">&#x1f4c4;</div>
-            <p class="text-primary fw-bold mb-1">Drag &amp; drop your .docx file here</p>
-            <p class="text-muted small">or click to browse</p>
-            <input type="file" id="file-input" accept=".docx" class="d-none">
+            <p class="text-primary fw-bold mb-1">Drag &amp; drop your file here</p>
+            <p class="text-muted small">Accepts .docx (extract new) or .xlsx (import previous export)</p>
+            <input type="file" id="file-input" accept=".docx,.xlsx" class="d-none">
         </div>
 
         <p class="text-muted small mt-3">&#x1f512; All processing happens locally &mdash; no data leaves your machine</p>
@@ -35,4 +74,22 @@
         </div>
     </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+function switchBackend(backend) {
+    fetch('/backend', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({backend: backend})
+    }).then(r => r.json()).then(data => {
+        const info = document.getElementById('backend-info');
+        if (data.backend === 'claude') {
+            info.textContent = 'Using Claude Haiku API \u2014 fast, requires internet';
+        } else {
+            info.textContent = 'Using Ollama locally \u2014 slower, fully private';
+        }
+    });
+}
+</script>
 {% endblock %}

@@ -1,5 +1,6 @@
 groups:
   - name: Demographics
+    color: "#A8A8A8"
     description: "Patient demographic information"
     fields:
       - key: dob
@@ -39,44 +40,47 @@ groups:
         type: string
 
   - name: Endoscopy
+    color: "#6AB0E3"
     description: "Endoscopy procedure details"
     fields:
       - key: endoscopy_date
         excel_column: 8
         excel_header: "Endoscopy: date(f)"
-        prompt_hint: "Date of endoscopy procedure. Format: DD/MM/YYYY"
+        prompt_hint: "Date of endoscopy/colonoscopy/flexi sig procedure from Clinical Details(f) section. Format: DD/MM/YYYY. If no date is given, return 'Missing'."
         type: date
       - key: endoscopy_type
         excel_column: 9
         excel_header: "Endoscopy type: flexi sig, incomplete colonoscopy, colonoscopy complete(f)"
-        prompt_hint: "Type: flexi sig, incomplete colonoscopy, or colonoscopy complete (reaches ileocecal valve)"
+        prompt_hint: "Type of endoscopy from Clinical Details(f): 'Colonoscopy complete', 'Flexi sig', or 'Incomplete colonoscopy'. Look for 'Colonoscopy:', 'Flexi sig:', etc."
         type: string
       - key: endoscopy_findings
         excel_column: 10
         excel_header: "Endoscopy: Findings(f)"
-        prompt_hint: "Clinical findings from endoscopy as described in notes"
+        prompt_hint: "The full text of colonoscopy/endoscopy findings from Clinical Details(f) section. Copy the descriptive text verbatim."
         type: text
 
   - name: Histology
+    color: "#7BC67E"
     description: "Biopsy and histology results"
     fields:
       - key: biopsy_result
         excel_column: 11
         excel_header: "Histology: Biopsy result(g)"
-        prompt_hint: "Histology biopsy result (e.g., ADENOCARCINOMA, NOT OTHERWISE SPECIFIED)"
+        prompt_hint: "Histology/biopsy result from Staging & Diagnosis(g) section under 'Diagnosis:'. e.g., 'Adenocarcinoma'. Use short form, not the full ICD10 text."
         type: text
       - key: biopsy_date
         excel_column: 12
         excel_header: "Histology: Biopsy date(g)"
-        prompt_hint: "Date of biopsy. Format: DD/MM/YYYY"
+        prompt_hint: "Date of biopsy from Staging & Diagnosis section. Format: DD/MM/YYYY. If not stated, return 'Missing'."
         type: date
       - key: mmr_status
         excel_column: 13
         excel_header: "Histology: MMR status(g/h)"
-        prompt_hint: "Mismatch Repair status: Proficient or Deficient"
+        prompt_hint: "Mismatch Repair (MMR) status. Look in both Staging(g) and MDT Outcome(h) sections. Values: 'Proficient' or 'Deficient'. May appear as 'MMR proficient' or 'dMMR'."
         type: string
 
   - name: Baseline MRI
+    color: "#F0C75E"
     description: "Baseline MRI imaging results"
     fields:
       - key: baseline_mri_date
@@ -111,57 +115,59 @@ groups:
         type: string
 
   - name: Baseline CT
+    color: "#F0C75E"
     description: "Baseline CT imaging results"
     fields:
       - key: baseline_ct_date
         excel_column: 20
         excel_header: "Baseline CT: Date(h)"
-        prompt_hint: "Date of baseline CT. Format: DD/MM/YYYY"
+        prompt_hint: "Date of CT scan from MDT Outcome(h) section. Look for 'CT DD/MM/YYYY' pattern. Format: DD/MM/YYYY."
         type: date
       - key: baseline_ct_t
         excel_column: 21
         excel_header: "Baseline CT: T(h)"
-        prompt_hint: "CT tumour staging (T)"
+        prompt_hint: "CT tumour staging from MDT Outcome(h). Extract T value from TNM staging (e.g., T3d from T3dN2M1). Include substage letter if present."
         type: string
       - key: baseline_ct_n
         excel_column: 22
         excel_header: "Baseline CT: N(h)"
-        prompt_hint: "CT nodal staging (N)"
+        prompt_hint: "CT nodal staging from MDT Outcome(h). Extract N value from TNM staging (e.g., N2 from T3dN2M1)."
         type: string
       - key: baseline_ct_emvi
         excel_column: 23
         excel_header: "Baseline CT: EMVI(h)"
-        prompt_hint: "Extramural vascular invasion on CT"
+        prompt_hint: "Extramural vascular invasion from MDT Outcome(h). May appear as 'EMVI +ve', 'EMVI -ve', 'EMVI positive', 'EMVI negative'. If not mentioned return 'missing'."
         type: string
       - key: baseline_ct_m
         excel_column: 24
         excel_header: "Baseline CT: M(h)"
-        prompt_hint: "Metastasis staging (M): M0 or M1 (with site if stated)"
+        prompt_hint: "Metastasis staging from MDT Outcome(h). Extract M value from TNM staging (e.g., M1 from T3dN2M1). M0 means no metastasis, M1 means metastasis present."
         type: string
       - key: baseline_ct_incidental
         excel_column: 25
         excel_header: "Baseline CT: Incidental findings requiring follow up? Y/N(h)"
-        prompt_hint: "Incidental findings on CT requiring follow-up: Yes or No"
+        prompt_hint: "Were there incidental findings on CT requiring follow-up? Return 'Y' or 'N'. Look for mentions of unexpected findings like enlarged nodes, liver lesions, etc."
         type: string
       - key: baseline_ct_incidental_detail
         excel_column: 26
         excel_header: "Baseline CT: Detail incidental finding(h)"
-        prompt_hint: "Description of incidental finding if applicable"
+        prompt_hint: "Description of incidental CT findings if any (e.g., 'Mildly enlarged retroperitoneal nodes')."
         type: text
 
   - name: MDT
+    color: "#A8A8A8"
     description: "MDT meeting decisions and treatment planning"
     fields:
       - key: first_mdt_date
         excel_column: 27
         excel_header: "1st MDT: date(i)"
-        prompt_hint: "Date of first MDT meeting. Format: DD/MM/YYYY"
+        prompt_hint: "The MDT Meeting Date from the top of the document (marked with (i)). This is the date of the first MDT discussion. Format: DD/MM/YYYY."
         type: date
       - key: first_mdt_treatment
         excel_column: 28
         excel_header: "1st MDT: Treatment approach"
-        prompt_hint: "Treatment approach: TNT, downstaging chemotherapy, downstaging nCRT, downstaging short-course RT, Papillon +/- EBRT, or straight to surgery"
-        type: string
+        prompt_hint: "The FULL text after 'Outcome:' in the MDT Outcome(h) section. Copy the complete management plan verbatim — this includes all recommended actions, not just a category name like 'TNT'."
+        type: text
       - key: mdt_6week_date
         excel_column: 55
         excel_header: "MDT (after 6 week): Date"
@@ -184,6 +190,7 @@ groups:
         type: text
 
   - name: Chemotherapy
+    color: "#7BC67E"
     description: "Chemotherapy treatment details"
     fields:
       - key: chemo_goals
@@ -213,6 +220,7 @@ groups:
         type: text
 
   - name: Immunotherapy
+    color: "#7BC67E"
     description: "Immunotherapy treatment details"
     fields:
       - key: immuno_dates
@@ -227,6 +235,7 @@ groups:
         type: string
 
   - name: Radiotherapy
+    color: "#7BC67E"
     description: "Radiotherapy treatment details"
     fields:
       - key: radio_total_dose
@@ -251,6 +260,7 @@ groups:
         type: string
 
   - name: CEA and Clinical
+    color: "#7BC67E"
     description: "CEA markers and clinical examination"
     fields:
       - key: cea_date
@@ -275,6 +285,7 @@ groups:
         type: text
 
   - name: Surgery
+    color: "#F0C75E"
     description: "Surgical intervention details"
     fields:
       - key: defunctioned
@@ -294,6 +305,7 @@ groups:
         type: text
 
   - name: Second MRI
+    color: "#A8A8A8"
     description: "Second MRI assessment results"
     fields:
       - key: second_mri_date
@@ -338,6 +350,7 @@ groups:
         type: string
 
   - name: 12-Week MRI
+    color: "#A8A8A8"
     description: "12-week MRI follow-up results"
     fields:
       - key: week12_mri_date
@@ -377,6 +390,7 @@ groups:
         type: string
 
   - name: Follow-up Flex Sig
+    color: "#A8A8A8"
     description: "Follow-up flexible sigmoidoscopy"
     fields:
       - key: flexsig_date
@@ -391,6 +405,7 @@ groups:
         type: text
 
   - name: Watch and Wait
+    color: "#7BC67E"
     description: "Watch and wait surveillance programme"
     fields:
       - key: ww_entered_date
@@ -425,6 +440,7 @@ groups:
         type: date
 
   - name: Watch and Wait Dates
+    color: "#F0C75E"
     description: "Longitudinal watch and wait surveillance dates (MRI and flexisigmoidoscopy)"
     fields:
       - key: ww_start_date

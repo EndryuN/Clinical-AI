@@ -28,7 +28,12 @@ All processing happens on your machine. No data leaves the local environment.
 
 ```bash
 # Download and install Ollama from https://ollama.com
-# Then pull the model:
+# Then pull the model (default is qwen2.5:14b-instruct):
+ollama pull qwen2.5:14b-instruct
+
+# Other recommended models for testing:
+ollama pull qwen3:8b
+ollama pull qwen3.5:4b
 ollama pull llama3.1:8b
 ```
 
@@ -113,7 +118,7 @@ Clinical AI/
 | Problem | Fix |
 |---------|-----|
 | "Cannot connect to Ollama" | Run `ollama serve` in a terminal |
-| "Model not found" | Run `ollama pull llama3.1:8b` |
+| "Model not found" | Run `ollama pull qwen2.5:14b-instruct` (or `qwen3:8b`, `qwen3.5:4b`) |
 | Extraction very slow | Close other apps to free RAM. Check `ollama ps` for GPU usage. |
 | 0 patients detected | Check document format. Use `/debug/raw-text` to inspect. |
 | Port 5000 in use | Run `python app.py --port 5001` |

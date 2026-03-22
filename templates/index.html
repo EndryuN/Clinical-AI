@@ -48,12 +48,21 @@
                     <select id="ollama-model-select" class="form-select form-select-sm bg-dark text-light border-secondary mx-auto"
                             style="max-width: 300px;"
                             onchange="switchModel(this.value)">
-                        {% for model in ollama_models %}
-                        <option value="{{ model }}" {{ 'selected' if model == current_ollama_model else '' }}>{{ model }}</option>
-                        {% endfor %}
-                        {% if not ollama_models %}
-                        <option value="qwen2.5:14b-instruct">qwen2.5:14b-instruct (not pulled)</option>
+                        {% if ollama_models %}
+                        <optgroup label="Installed Models">
+                            {% for model in ollama_models %}
+                            <option value="{{ model }}" {{ 'selected' if model == current_ollama_model else '' }}>{{ model }}</option>
+                            {% endfor %}
+                        </optgroup>
                         {% endif %}
+                        
+                        <optgroup label="Suggested Models">
+                            {% for model in suggested_models %}
+                            {% if model not in ollama_models %}
+                            <option value="{{ model }}" {{ 'selected' if model == current_ollama_model else '' }}>{{ model }} (not pulled)</option>
+                            {% endif %}
+                            {% endfor %}
+                        </optgroup>
                     </select>
                 </div>
 

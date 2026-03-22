@@ -23,6 +23,14 @@ TIMEOUT = 120
 _backend = "claude" if ANTHROPIC_API_KEY else "ollama"
 _ollama_model = "qwen2.5:14b-instruct"  # default local model
 
+SUGGESTED_MODELS = [
+    "qwen2.5:14b-instruct",
+    "qwen3:8b",
+    "qwen3.5:4b",
+    "llama3.1:8b",
+    "llama3.2:3b"
+]
+
 
 def get_backend() -> str:
     return _backend

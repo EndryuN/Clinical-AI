@@ -17,7 +17,7 @@ from flask import Flask, render_template, request, jsonify, Response, send_file,
 from models import ExtractionSession, PatientBlock, FieldResult
 from parser.docx_parser import parse_docx, get_raw_text
 from extractor.llm_client import (check_ollama, generate, get_backend, set_backend,
-    check_ollama_available, check_claude_available, list_ollama_models, get_ollama_model, set_ollama_model)
+    check_ollama_available, check_claude_available, list_ollama_models, get_ollama_model, set_ollama_model, SUGGESTED_MODELS)
 from extractor.prompt_builder import build_prompt, build_all_prompts
 from extractor.response_parser import parse_llm_response
 from extractor.regex_extractor import regex_extract
@@ -42,6 +42,7 @@ def index():
                            ollama_available=check_ollama_available(),
                            claude_available=check_claude_available(),
                            ollama_models=list_ollama_models(),
+                           suggested_models=SUGGESTED_MODELS,
                            current_ollama_model=get_ollama_model())
 
 

@@ -81,8 +81,6 @@ def parse_llm_response(raw_response: str, group: dict) -> dict[str, FieldResult]
         if value is not None and field_types.get(key) == 'text':
             typos = _check_spelling(value)
             if typos:
-                if confidence == 'high':
-                    confidence = 'medium'
                 reason = f"[Possible misspelling: {', '.join(typos[:3])}] {reason}"
 
         results[key] = FieldResult(value=value, confidence=confidence, reason=reason)

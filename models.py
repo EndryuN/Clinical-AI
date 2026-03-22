@@ -8,6 +8,8 @@ class FieldResult:
     reason: str = ""
     edited: bool = False
     original_value: Optional[str] = None
+    source_cell: Optional[dict] = None    # {"row": int, "col": int} or None
+    source_snippet: Optional[str] = None  # raw match span as it appears in doc
 
 @dataclass
 class PatientBlock:
@@ -16,6 +18,8 @@ class PatientBlock:
     nhs_number: str = ""
     raw_text: str = ""
     extractions: dict = field(default_factory=dict)
+    raw_cells: list = field(default_factory=list)
+    # [{"row": int, "col": int, "text": str}, ...] — all cells, including empty
 
 @dataclass
 class ExtractionSession:
@@ -32,5 +36,9 @@ class ExtractionSession:
         "patient_times": [],  # List of seconds per patient
         "current_patient_start": 0,
         "average_seconds": 0,
-        "active_patients": {} # {patient_id: {group: name, start: time}}
+        "active_patients": {}, # {patient_id: {group: name, start: time}}
+        "phase": "idle",        # "regex" | "llm" | "complete"
+        "regex_complete": 0,
+        "llm_queue_size": 0,
+        "llm_complete": 0,
     })

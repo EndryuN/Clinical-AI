@@ -207,12 +207,19 @@ def stop_extraction():
 
 
 def _run_extraction(patient_limit=None, concurrency=1):
+    # concurrency is retained for API compatibility but not used —
+    # Phase 1 uses max(1, min(N, 16)) and Phase 2 uses max_workers=2 (semaphore-controlled)
     import time
     from concurrent.futures import ThreadPoolExecutor
 
     groups = get_groups()
     llm_groups = [g for g in groups if g.get('llm_required', False)]
     patients_to_process = session.patients[:patient_limit] if patient_limit else session.patients
+
+    if not patients_to_process:
+        session.status = 'complete'
+        session.progress['phase'] = 'complete'
+        return
 
     session.progress['total'] = len(patients_to_process)
     session.progress['phase'] = 'regex'
@@ -221,7 +228,7 @@ def _run_extraction(patient_limit=None, concurrency=1):
     session.progress['current_patient'] = 0
     session.progress['patient_times'] = []
     session.progress['active_patients'] = {}
-    session.progress.setdefault('completed_patients', [])
+    session.progress['completed_patients'] = []
 
     _counter_lock = threading.Lock()
 
@@ -267,8 +274,24 @@ def _run_extraction(patient_limit=None, concurrency=1):
     ]
     session.progress['llm_queue_size'] = len(llm_tasks)
 
+    # Build per-patient actual task counts from llm_tasks
+    _patient_task_counts = {}
+    for p, g in llm_tasks:
+        _patient_task_counts[p.id] = _patient_task_counts.get(p.id, 0) + 1
+
+    # Handle patients that generated zero LLM tasks — mark them complete immediately
+    for p in patients_to_process:
+        if p.id not in _patient_task_counts:
+            conf = _confidence_summary(p)
+            session.progress['completed_patients'].append({
+                "id": p.id,
+                "initials": p.initials,
+                "confidence_summary": conf,
+                "seconds": 0,
+            })
+
     # Track per-patient group completion to avoid premature "done" signals.
-    # Use a counter dict: {patient_id: number_of_llm_groups_completed}
+    # Use a counter dict: {patient_id: number_of_llm_tasks_completed}
     _patient_group_counts = {p.id: 0 for p in patients_to_process}
 
     def llm_phase(task):
@@ -290,15 +313,15 @@ def _run_extraction(patient_limit=None, concurrency=1):
                         _resolve_source_cell(patient, llm_fr)
                         llm_fr.reason = f"[LLM] {llm_fr.reason}"
                         patient.extractions[group['name']][key] = llm_fr
-            except Exception:
-                pass
+            except Exception as e:
+                log_event('llm_extraction_error', patient_id=patient.id, group=group['name'], error=str(e))
         del session.progress['active_patients'][task_key]
         with _counter_lock:
             session.progress['llm_complete'] += 1
             session.progress['current_patient'] = session.progress['llm_complete']
             _patient_group_counts[patient.id] += 1
-            # Patient is fully done only when ALL its LLM groups have completed
-            if _patient_group_counts[patient.id] == len(llm_groups):
+            # Patient is fully done only when ALL its actual LLM tasks have completed
+            if _patient_group_counts[patient.id] == _patient_task_counts.get(patient.id, 0):
                 conf = _confidence_summary(patient)
                 session.progress['completed_patients'].append({
                     "id": patient.id,

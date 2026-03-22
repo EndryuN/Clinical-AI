@@ -47,4 +47,5 @@ class ExtractionSession:
         "regex_complete": 0,
         "llm_queue_size": 0,
         "llm_complete": 0,
+        "completed_patients": [],
     })

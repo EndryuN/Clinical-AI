@@ -197,17 +197,21 @@ def extract():
 
 
 def _run_extraction(patient_limit=None):
+    import time
     groups = get_groups()
     completed_patients = []
 
     patients_to_process = session.patients[:patient_limit] if patient_limit else session.patients
     session.progress['total'] = len(patients_to_process)
+    session.progress['patient_times'] = []
 
     # Groups that need LLM for fields regex can't handle
     LLM_GROUPS = {'Endoscopy', 'Baseline CT', 'Surgery', 'Watch and Wait'}
 
     for i, patient in enumerate(patients_to_process):
         session.progress['current_patient'] = i + 1
+        patient_start_time = time.time()
+        session.progress['current_patient_start'] = patient_start_time
 
         for group in groups:
             session.progress['current_group'] = group['name']
@@ -260,11 +264,17 @@ def _run_extraction(patient_limit=None):
                           group=group['name'],
                           error=str(e))
 
+        patient_end_time = time.time()
+        elapsed = patient_end_time - patient_start_time
+        session.progress['patient_times'].append(elapsed)
+        session.progress['average_seconds'] = sum(session.progress['patient_times']) / len(session.progress['patient_times'])
+
         # Track completed patient for SSE progress
         completed_patients.append({
             "id": patient.id,
             "initials": patient.initials,
-            "confidence_summary": _confidence_summary(patient)
+            "confidence_summary": _confidence_summary(patient),
+            "seconds": round(elapsed, 1)
         })
         session.progress['completed_patients'] = completed_patients
 
@@ -276,20 +286,27 @@ def progress():
     def event_stream():
         import time
         last_patient = 0
-        while session.status == 'extracting':
+        last_group = ""
+        while session.status == 'extracting' or session.status == 'complete':
             current = session.progress.get('current_patient', 0)
-            if current != last_patient:
-                last_patient = current
-                event_data = {
-                    "current_patient": session.progress['current_patient'],
-                    "total": session.progress['total'],
-                    "current_group": session.progress.get('current_group', ''),
-                    "completed_patients": session.progress.get('completed_patients', [])
-                }
-                yield f"data: {json.dumps(event_data)}\n\n"
-            time.sleep(1)
-        # Final event
-        yield f"data: {json.dumps({'status': 'complete', 'total': session.progress['total']})}\n\n"
+            group = session.progress.get('current_group', '')
+            
+            # Send update if patient changed, group changed, or every 2 seconds for timer
+            event_data = {
+                "current_patient": session.progress['current_patient'],
+                "total": session.progress['total'],
+                "current_group": session.progress.get('current_group', ''),
+                "completed_patients": session.progress.get('completed_patients', []),
+                "average_seconds": round(session.progress.get('average_seconds', 0), 1),
+                "current_patient_start": session.progress.get('current_patient_start', 0),
+                "status": session.status
+            }
+            yield f"data: {json.dumps(event_data)}\n\n"
+            
+            if session.status == 'complete':
+                break
+                
+            time.sleep(2)
 
     return Response(stream_with_context(event_stream()), mimetype='text/event-stream')
 

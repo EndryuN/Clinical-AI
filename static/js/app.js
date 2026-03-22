@@ -118,12 +118,14 @@ function startExtraction() {
 
 function listenProgress() {
     const source = new EventSource('/progress');
+    let timerInterval = null;
 
     source.onmessage = function(event) {
         const data = JSON.parse(event.data);
 
         if (data.status === 'complete') {
             source.close();
+            if (timerInterval) clearInterval(timerInterval);
             const progressSection = document.getElementById('progress-section');
             const completeSection = document.getElementById('complete-section');
             const completeSummary = document.getElementById('complete-summary');
@@ -131,7 +133,7 @@ function listenProgress() {
             if (progressSection) progressSection.classList.add('d-none');
             if (completeSection) completeSection.classList.remove('d-none');
             if (completeSummary) {
-                completeSummary.textContent = `${data.total} patients processed successfully`;
+                completeSummary.textContent = `${data.total} patients processed successfully. Average speed: ${data.average_seconds}s per patient.`;
             }
             return;
         }
@@ -141,11 +143,31 @@ function listenProgress() {
         const progressBar = document.getElementById('progress-bar');
         const progressText = document.getElementById('progress-text');
         const currentPatientEl = document.getElementById('current-patient');
+        const averageSpeedEl = document.getElementById('average-speed');
+        const currentTimerEl = document.getElementById('current-timer');
 
         if (progressBar) progressBar.style.width = pct + '%';
         if (progressText) progressText.textContent = `${data.current_patient} / ${data.total} patients`;
         if (currentPatientEl) {
             currentPatientEl.textContent = `Patient ${data.current_patient} — ${data.current_group}`;
+        }
+        if (averageSpeedEl) {
+            averageSpeedEl.textContent = `${data.average_seconds}s / patient`;
+        }
+
+        // Update timer
+        if (data.current_patient_start > 0) {
+            if (timerInterval) clearInterval(timerInterval);
+            const start = data.current_patient_start * 1000;
+            const updateTimer = () => {
+                const now = Date.now();
+                const diff = Math.floor((now - start) / 1000);
+                const mins = Math.floor(diff / 60).toString().padStart(2, '0');
+                const secs = (diff % 60).toString().padStart(2, '0');
+                if (currentTimerEl) currentTimerEl.textContent = `${mins}:${secs}`;
+            };
+            updateTimer();
+            timerInterval = setInterval(updateTimer, 1000);
         }
 
         // Render completed patients log
@@ -154,10 +176,13 @@ function listenProgress() {
             if (log) {
                 log.innerHTML = data.completed_patients.slice().reverse().map(p => {
                     const c = p.confidence_summary || {};
-                    return `<div class="text-muted py-1">&#x2713; ${p.initials || p.id} &middot; ` +
+                    const timeStr = p.seconds ? `(${p.seconds}s)` : '';
+                    return `<div class="text-muted py-1 d-flex justify-content-between">` +
+                        `<span>&#x2713; ${p.initials || p.id} &middot; ` +
                         `<span class="text-success">${c.high || 0} high</span> &middot; ` +
                         `<span class="text-warning">${c.medium || 0} med</span> &middot; ` +
-                        `<span class="text-danger">${c.low || 0} low</span></div>`;
+                        `<span class="text-danger">${c.low || 0} low</span></span>` +
+                        `<span class="ms-2">${timeStr}</span></div>`;
                 }).join('');
                 log.scrollTop = 0;
             }

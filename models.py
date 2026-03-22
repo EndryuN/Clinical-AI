@@ -26,5 +26,8 @@ class ExtractionSession:
     progress: dict = field(default_factory=lambda: {
         "current_patient": 0,
         "total": 0,
-        "current_group": ""
+        "current_group": "",
+        "patient_times": [],  # List of seconds per patient
+        "current_patient_start": 0,
+        "average_seconds": 0
     })

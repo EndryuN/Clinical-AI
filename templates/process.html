@@ -20,13 +20,22 @@
 
         <div id="progress-section" class="d-none">
             <h4>Extracting...</h4>
-            <div class="mb-3">
-                <div class="d-flex justify-content-between text-muted small mb-1">
-                    <span>Overall Progress</span>
-                    <span id="progress-text">0 / 0 patients</span>
+            <div class="row mb-3">
+                <div class="col-6">
+                    <div class="d-flex justify-content-between text-muted small mb-1">
+                        <span>Overall Progress</span>
+                        <span id="progress-text">0 / 0 patients</span>
+                    </div>
+                    <div class="progress" style="height: 12px;">
+                        <div id="progress-bar" class="progress-bar bg-success" style="width: 0%"></div>
+                    </div>
                 </div>
-                <div class="progress" style="height: 12px;">
-                    <div id="progress-bar" class="progress-bar bg-success" style="width: 0%"></div>
+                <div class="col-6">
+                    <div class="d-flex justify-content-between text-muted small mb-1">
+                        <span>Average Speed</span>
+                        <span id="average-speed">0s / patient</span>
+                    </div>
+                    <div class="text-primary fw-bold" id="current-timer">00:00</div>
                 </div>
             </div>
 

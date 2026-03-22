@@ -280,7 +280,7 @@ function renderPatientList(patients) {
             <div class="text-muted" style="font-size:11px">${p.nhs_number || ''} &middot; ${p.cancer_type || ''}</div>
             <div class="mt-1">
                 <span class="badge bg-success" style="font-size:10px">${c.high || 0} high</span>
-                <span class="badge bg-warning text-dark" style="font-size:10px">${c.medium || 0} med</span>
+                <span class="badge bg-danger" style="font-size:10px">${c.medium || 0} med</span>
                 <span class="badge bg-danger" style="font-size:10px">${c.low || 0} low</span>
             </div>
         </div>`;
@@ -293,9 +293,9 @@ function selectPatient(patientId) {
     fetch(`/patients/${patientId}`)
         .then(r => r.json())
         .then(data => {
-            // Update source text panel
-            const sourceText = document.getElementById('source-text');
-            if (sourceText) sourceText.textContent = data.raw_text || '';
+            // Update source document panel
+            renderSourceTable(data.raw_cells || []);
+            window._currentRawCells = data.raw_cells || [];
 
             // Store extractions for re-rendering on filter change
             allPatientExtractions = data.extractions || {};
@@ -329,6 +329,96 @@ function selectPatient(patientId) {
             loadPatients();
         })
         .catch(err => console.error('Failed to load patient:', err));
+}
+
+function renderSourceTable(rawCells) {
+    const container = document.getElementById('source-table');
+    if (!container) return;
+    if (!rawCells || rawCells.length === 0) {
+        container.innerHTML = '<span class="text-muted small">No source document available (imported from Excel)</span>';
+        return;
+    }
+
+    // Group cells by row index
+    const rowMap = {};
+    rawCells.forEach(cell => {
+        if (!rowMap[cell.row]) rowMap[cell.row] = {};
+        rowMap[cell.row][cell.col] = cell.text;
+    });
+
+    const numCols = Math.max(...rawCells.map(c => c.col)) + 1;
+    const headerRows = new Set([0, 2, 4, 6]); // known Word table header rows
+
+    let html = '<table class="table table-dark table-sm table-bordered mb-0" style="font-size:10px; font-family:monospace;">';
+    Object.keys(rowMap).sort((a, b) => +a - +b).forEach(rowIdx => {
+        const isHeader = headerRows.has(+rowIdx);
+        html += `<tr style="${isHeader ? 'background:#21262d;' : ''}">`;
+        for (let c = 0; c < numCols; c++) {
+            const text = rowMap[rowIdx][c] || '';
+            // Always render all cols (including col 1) so data-row/col attrs are stable for
+            // highlightSource(). Visually dim col 1 if it duplicates col 0 — but never skip it,
+            // as source_cell may legitimately point to col 1.
+            const isDupe = c === 1 && text === (rowMap[rowIdx][0] || '');
+            const cellStyle = `color:${isHeader ? '#58a6ff' : '#8b949e'}; vertical-align:top; max-width:300px; word-break:break-word; ${isDupe ? 'opacity:0.3;' : ''}`;
+            html += `<td data-row="${rowIdx}" data-col="${c}" style="${cellStyle}">${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>`;
+        }
+        html += '</tr>';
+    });
+    html += '</table>';
+    container.innerHTML = html;
+}
+
+function highlightSource(fr) {
+    // Clear all previous highlights
+    document.querySelectorAll('#source-table td').forEach(td => {
+        td.style.border = '';
+        td.style.background = '';
+        // Restore plain text (remove any <mark> wrappers)
+        if (td.querySelector('mark')) {
+            td.textContent = td.textContent;
+        }
+    });
+    const warning = document.getElementById('source-warning');
+    if (warning) warning.classList.add('d-none');
+
+    if (!fr || fr.value === null || fr.value === undefined) return;
+
+    const conf = fr.confidence || 'none';
+    const colours = {
+        high:   { border: '#198754', mark: 'rgba(25,135,84,0.3)',  text: '#6ee7a0' },
+        medium: { border: '#dc3545', mark: 'rgba(220,53,69,0.25)', text: '#ff8c94' },
+        low:    { border: '#dc3545', mark: 'rgba(220,53,69,0.35)', text: '#ff6b6b' },
+    };
+    const colour = colours[conf];
+
+    if (fr.source_cell && colour) {
+        const { row, col } = fr.source_cell;
+        const td = document.querySelector(`#source-table td[data-row="${row}"][data-col="${col}"]`);
+        if (td) {
+            td.style.border = `2px solid ${colour.border}`;
+            td.style.background = colour.mark;
+            // Highlight snippet using textContent split (XSS-safe)
+            if (fr.source_snippet) {
+                const fullText = td.textContent;
+                const idx = fullText.indexOf(fr.source_snippet);
+                if (idx !== -1) {
+                    td.textContent = '';
+                    const before = document.createTextNode(fullText.slice(0, idx));
+                    const mark = document.createElement('mark');
+                    mark.style.cssText = `background:${colour.mark}; color:${colour.text}; border-radius:2px; padding:0 2px;`;
+                    mark.textContent = fr.source_snippet;
+                    const after = document.createTextNode(fullText.slice(idx + fr.source_snippet.length));
+                    td.appendChild(before);
+                    td.appendChild(mark);
+                    td.appendChild(after);
+                }
+            }
+            td.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    } else if (fr.value !== null) {
+        // Value exists but no source cell — possible hallucination
+        if (warning) warning.classList.remove('d-none');
+    }
 }
 
 function renderGroupTabs(groups) {
@@ -426,22 +516,26 @@ function renderFieldTable(fields, groupName) {
         const hasValue = fr.value !== null && fr.value !== undefined && fr.value !== '';
         const reason = (fr.reason || '').toLowerCase();
         const isInferred = hasValue && (fr.confidence === 'medium' || reason.includes('infer'));
+        const isPending = !hasValue && fr.confidence === 'none' && !fr.edited;
 
         const confClass = !hasValue ? 'secondary' :
-                          isInferred ? 'info' :
+                          isInferred ? 'danger' :
                           fr.confidence === 'high' ? 'success' :
                           fr.confidence === 'medium' ? 'warning' :
                           fr.confidence === 'none' ? 'secondary' : 'danger';
-        const confText = !hasValue ? 'EMPTY' :
+        const confText = !hasValue ? (isPending ? 'PENDING' : 'EMPTY') :
                          isInferred ? 'INFERRED' :
                          fr.confidence === 'none' ? 'N/A' : (fr.confidence || 'low').toUpperCase();
         const safeValue = (fr.value || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const editedBadge = fr.edited ? '<span class="badge bg-info ms-1" style="font-size:9px">EDITED</span>' : '';
         const safeReason = (fr.reason || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const inputBorder = isInferred ? 'border-color: #0dcaf0 !important;' : '';
-        const rowBg = isInferred ? 'background-color: rgba(13, 202, 240, 0.05);' : '';
+        const inputBorder = isInferred ? 'border-color: #dc3545 !important;' : '';
+        const rowBg = isInferred ? 'background-color: rgba(220, 53, 69, 0.05);' : '';
+        const frData = JSON.stringify({value: fr.value, confidence: fr.confidence, source_cell: fr.source_cell || null, source_snippet: fr.source_snippet || null});
+        const safeFrData = frData.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         return `
-        <tr style="border-left: 4px solid ${groupColor}; ${rowBg}">
+        <tr class="${isPending ? 'pending-row' : ''}" style="border-left: 4px solid ${groupColor}; ${rowBg} cursor:pointer;"
+            data-fr="${safeFrData}" onclick="highlightSource(JSON.parse(this.dataset.fr))">
             <td class="small" style="color: ${hasValue ? '#c9d1d9' : '#555'};">${key}</td>
             <td>
                 <input type="text" class="form-control form-control-sm bg-dark text-light border-${confClass}"
@@ -488,4 +582,35 @@ function editField(group, field, newValue) {
             }
         })
         .catch(err => console.error('Edit failed:', err));
+}
+
+// ===== Live Review During Extraction =====
+function initLiveReview() {
+    fetch('/status')
+        .then(r => r.json())
+        .then(data => {
+            if (data.status !== 'extracting') return;
+            const source = new EventSource('/progress');
+            let lastCompleted = 0;
+
+            source.onmessage = function(event) {
+                const d = JSON.parse(event.data);
+                const completed = (d.completed_patients || []).length;
+                if (completed > lastCompleted) {
+                    lastCompleted = completed;
+                    loadPatients();
+                }
+                if (d.status === 'complete' || d.status === 'stopped') {
+                    source.close();
+                    loadPatients();
+                }
+            };
+            window.addEventListener('beforeunload', () => source.close());
+        })
+        .catch(() => {});
+}
+
+// Only run on review page
+if (document.getElementById('source-panel')) {
+    initLiveReview();
 }

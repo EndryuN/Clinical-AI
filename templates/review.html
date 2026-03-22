@@ -58,9 +58,14 @@
         </div>
 
         <!-- Source Text Panel -->
-        <div class="border-top border-secondary p-3" style="max-height: 150px; overflow-y: auto;">
-            <div class="text-muted small text-uppercase mb-1">Source Text</div>
-            <pre id="source-text" class="text-muted small mb-0" style="white-space: pre-wrap;">Select a patient to view source text</pre>
+        <div id="source-panel" class="border-top border-secondary p-3" style="min-height: 250px; resize: vertical; overflow-y: auto;">
+            <div class="text-muted small text-uppercase mb-1">Source Document</div>
+            <div id="source-warning" class="d-none alert alert-danger py-1 small mt-1 mb-2">
+                Value not found in source document — possible hallucination
+            </div>
+            <div id="source-table">
+                <span class="text-muted small">Select a patient to view source document</span>
+            </div>
         </div>
     </div>
 </div>

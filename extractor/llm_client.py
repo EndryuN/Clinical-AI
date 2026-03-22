@@ -2,6 +2,9 @@ import os
 import requests
 import json
 
+# Module-level Session for connection pooling
+_session = requests.Session()
+
 # Load .env file if present
 _env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 if os.path.exists(_env_path):
@@ -55,7 +58,7 @@ def set_ollama_model(model: str):
 def list_ollama_models() -> list[str]:
     """Return list of models available in Ollama."""
     try:
-        resp = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+        resp = _session.get(f"{OLLAMA_URL}/api/tags", timeout=5)
         if resp.status_code == 200:
             return [m['name'] for m in resp.json().get('models', [])]
     except requests.ConnectionError:
@@ -66,7 +69,7 @@ def list_ollama_models() -> list[str]:
 def check_ollama_available() -> bool:
     """Check if Ollama is running and has at least one model."""
     try:
-        resp = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+        resp = _session.get(f"{OLLAMA_URL}/api/tags", timeout=5)
         return resp.status_code == 200 and len(resp.json().get('models', [])) > 0
     except requests.ConnectionError:
         return False
@@ -105,7 +108,7 @@ def _generate_claude(prompt: str) -> str:
         ]
     }
     try:
-        resp = requests.post(CLAUDE_URL, headers=headers, json=payload, timeout=TIMEOUT)
+        resp = _session.post(CLAUDE_URL, headers=headers, json=payload, timeout=TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
         content = data.get("content", [])
@@ -132,7 +135,7 @@ def _generate_ollama(prompt: str) -> str:
         }
     }
     try:
-        resp = requests.post(f"{OLLAMA_URL}/api/generate", json=payload, timeout=TIMEOUT)
+        resp = _session.post(f"{OLLAMA_URL}/api/generate", json=payload, timeout=TIMEOUT)
         resp.raise_for_status()
         return resp.json().get('response', '')
     except requests.ConnectionError:

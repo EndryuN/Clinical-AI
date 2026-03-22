@@ -149,16 +149,35 @@ function stopExtraction() {
         stopBtn.textContent = 'Stopping…';
         stopBtn.disabled = true;
     }
-    const phaseLabel = document.getElementById('phase-label');
-    if (phaseLabel) { phaseLabel.textContent = 'Stopping…'; phaseLabel.style.background = '#dc3545'; }
+    const regexBar = document.getElementById('progress-bar-regex');
+    if (regexBar) regexBar.style.background = '#dc3545';
 }
 
 function listenProgress() {
     const source = new EventSource('/progress');
     let timerInterval = null;
+    let extractionStartTime = null;
+
+    function startTimer() {
+        if (timerInterval) return;
+        timerInterval = setInterval(() => {
+            if (!extractionStartTime) return;
+            const elapsed = Math.floor((Date.now() / 1000) - extractionStartTime);
+            const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const secs = (elapsed % 60).toString().padStart(2, '0');
+            const timerEl = document.getElementById('current-timer');
+            if (timerEl) timerEl.textContent = `${mins}:${secs}`;
+        }, 1000);
+    }
 
     source.onmessage = function(event) {
         const data = JSON.parse(event.data);
+
+        // Capture start time from first message
+        if (data.start_time && !extractionStartTime) {
+            extractionStartTime = data.start_time;
+            startTimer();
+        }
 
         if (data.status === 'complete' || data.status === 'stopped') {
             source.close();
@@ -177,60 +196,55 @@ function listenProgress() {
         }
 
         const phase = data.phase || 'idle';
+        const total = data.total || 0;
 
-        // Phase-aware progress calculation
-        let pct = 0;
-        if (phase === 'regex' && data.total > 0) {
-            pct = ((data.regex_complete || 0) / data.total * 100).toFixed(0);
-        } else if (phase === 'llm' || phase === 'complete') {
-            const llmTotal = data.llm_queue_size || 0;
-            pct = llmTotal > 0 ? ((data.llm_complete || 0) / llmTotal * 100).toFixed(0) : 100;
-        }
+        // Regex bar: regex_complete / total
+        const regexPct = total > 0 ? ((data.regex_complete || 0) / total * 100).toFixed(0) : 0;
 
-        const progressBar = document.getElementById('progress-bar');
+        // LLM bar: llm_complete / llm_queue_size
+        const llmTotal = data.llm_queue_size || 0;
+        const llmPct = llmTotal > 0 ? ((data.llm_complete || 0) / llmTotal * 100).toFixed(0) : 0;
+
+        const regexBar = document.getElementById('progress-bar-regex');
+        const llmBar = document.getElementById('progress-bar-llm');
         const progressText = document.getElementById('progress-text');
-        const phaseLabel = document.getElementById('phase-label');
         const phaseDetail = document.getElementById('phase-detail');
         const activePatientsList = document.getElementById('active-patients-list');
         const averageSpeedEl = document.getElementById('average-speed');
 
-        // Phase-aware progress bar colour + animation
-        if (progressBar) {
-            progressBar.style.width = pct + '%';
+        if (regexBar) {
+            regexBar.style.width = regexPct + '%';
+            // Animate while regex is active, freeze once done
             if (phase === 'regex') {
-                progressBar.className = 'progress-bar bg-success progress-bar-striped progress-bar-animated';
-            } else if (phase === 'llm') {
-                progressBar.className = 'progress-bar bg-primary';
+                regexBar.className = 'progress-bar bg-success progress-bar-striped progress-bar-animated';
             } else {
-                progressBar.className = 'progress-bar bg-success';
+                regexBar.className = 'progress-bar bg-success';
+            }
+        }
+
+        if (llmBar) {
+            llmBar.style.width = llmPct + '%';
+            // Animate while LLM is active
+            if (phase === 'llm') {
+                llmBar.className = 'progress-bar bg-primary progress-bar-striped progress-bar-animated';
+            } else {
+                llmBar.className = 'progress-bar bg-primary';
             }
         }
 
         if (progressText) progressText.textContent = `${data.current_patient} / ${data.total} patients`;
 
-        if (phaseLabel) {
-            if (phase === 'regex') {
-                phaseLabel.textContent = 'Phase 1: Regex';
-                phaseLabel.style.cssText = 'background:#198754; color:#fff; font-size:9px; vertical-align:middle;';
-            } else if (phase === 'llm') {
-                phaseLabel.textContent = 'Phase 2: LLM';
-                phaseLabel.style.cssText = 'background:#0d6efd; color:#fff; font-size:9px; vertical-align:middle;';
-            } else {
-                phaseLabel.textContent = '';
-            }
-        }
-
         if (phaseDetail) {
-            if (phase === 'regex') {
-                phaseDetail.textContent = `Regex sweep: ${data.regex_complete || 0} / ${data.total} patients`;
-            } else if (phase === 'llm') {
-                phaseDetail.textContent = `LLM queue: ${data.llm_complete || 0} / ${data.llm_queue_size || 0} groups`;
+            if (phase === 'llm') {
+                phaseDetail.textContent = `${data.llm_complete || 0} / ${llmTotal} groups`;
+            } else if (phase === 'regex') {
+                phaseDetail.textContent = '';
             } else {
                 phaseDetail.textContent = '';
             }
         }
 
-        if (averageSpeedEl) {
+        if (averageSpeedEl && data.average_seconds > 0) {
             averageSpeedEl.textContent = `${data.average_seconds}s / patient`;
         }
 

@@ -248,10 +248,12 @@ def _run_extraction(patient_limit=None, concurrency=1):
     session.progress['phase'] = 'regex'
     session.progress['regex_complete'] = 0
     session.progress['llm_complete'] = 0
+    session.progress['llm_queue_size'] = 0
     session.progress['current_patient'] = 0
     session.progress['patient_times'] = []
     session.progress['active_patients'] = {}
     session.progress['completed_patients'] = []
+    session.progress['start_time'] = time.time()
 
     _counter_lock = threading.Lock()
 
@@ -375,9 +377,14 @@ def progress():
             event_data = {
                 "current_patient": session.progress['current_patient'],
                 "total": session.progress['total'],
+                "phase": session.progress.get('phase', 'idle'),
+                "regex_complete": session.progress.get('regex_complete', 0),
+                "llm_complete": session.progress.get('llm_complete', 0),
+                "llm_queue_size": session.progress.get('llm_queue_size', 0),
                 "active_patients": session.progress.get('active_patients', {}),
                 "completed_patients": session.progress.get('completed_patients', []),
                 "average_seconds": round(session.progress.get('average_seconds', 0), 1),
+                "start_time": session.progress.get('start_time', 0),
                 "status": session.status
             }
             yield f"data: {json.dumps(event_data)}\n\n"

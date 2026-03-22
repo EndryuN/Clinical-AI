@@ -57,6 +57,9 @@ def parse_llm_response(raw_response: str, group: dict) -> dict[str, FieldResult]
             confidence = confidence.lower() if isinstance(confidence, str) else 'low'
             if confidence not in ('high', 'medium', 'low'):
                 confidence = 'low'
+            # Cap: LLM may not claim HIGH — only regex earns HIGH
+            if confidence == 'high':
+                confidence = 'medium'
         else:
             value = None
             confidence = 'low'

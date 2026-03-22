@@ -120,3 +120,22 @@ pre {
 ::-webkit-scrollbar-thumb:hover {
     background: #484f58;
 }
+
+/* MEDIUM/INFERRED fields use red — same visual urgency as LOW */
+.inferred-row {
+    background-color: rgba(220, 53, 69, 0.05) !important;
+}
+.inferred-input {
+    border-color: #dc3545 !important;
+}
+/* PENDING rows (not yet extracted in two-phase pipeline) */
+.pending-row td {
+    color: #555 !important;
+    font-style: italic;
+}
+/* Source panel sizing */
+#source-panel {
+    min-height: 250px;
+    resize: vertical;
+    overflow-y: auto;
+}

@@ -24,7 +24,7 @@ TIMEOUT = 120
 
 # Runtime state
 _backend = "claude" if ANTHROPIC_API_KEY else "ollama"
-_ollama_model = "qwen2.5:14b-instruct"  # default local model
+_ollama_model = "qwen3.5:4b"  # default local model
 
 SUGGESTED_MODELS = [
     "qwen2.5:14b-instruct",

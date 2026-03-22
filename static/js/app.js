@@ -384,8 +384,9 @@ function selectPatient(patientId) {
     fetch(`/patients/${patientId}`)
         .then(r => r.json())
         .then(data => {
-            // Update source document panel
+            // Update source document panel and preview
             renderSourceTable(data.raw_cells || []);
+            renderDocPreview(data.raw_cells || []);
             window._currentRawCells = data.raw_cells || [];
 
             // Store extractions for re-rendering on filter change
@@ -430,7 +431,6 @@ function renderSourceTable(rawCells) {
         return;
     }
 
-    // Group cells by row index
     const rowMap = {};
     rawCells.forEach(cell => {
         if (!rowMap[cell.row]) rowMap[cell.row] = {};
@@ -438,35 +438,82 @@ function renderSourceTable(rawCells) {
     });
 
     const numCols = Math.max(...rawCells.map(c => c.col)) + 1;
-    const headerRows = new Set([0, 2, 4, 6]); // known Word table header rows
+    const headerRows = new Set([0, 2, 4, 6]);
 
-    let html = '<table class="table table-dark table-sm table-bordered mb-0" style="font-size:10px; font-family:monospace;">';
+    // Single-column document view — each row is a header block or content block.
+    // data-row / data-col preserved on each div so highlightSource() can target them.
+    let html = '<div style="font-size:11px;">';
     Object.keys(rowMap).sort((a, b) => +a - +b).forEach(rowIdx => {
         const isHeader = headerRows.has(+rowIdx);
-        html += `<tr style="${isHeader ? 'background:#21262d;' : ''}">`;
-        for (let c = 0; c < numCols; c++) {
-            const text = rowMap[rowIdx][c] || '';
-            // Always render all cols (including col 1) so data-row/col attrs are stable for
-            // highlightSource(). Visually dim col 1 if it duplicates col 0 — but never skip it,
-            // as source_cell may legitimately point to col 1.
-            const isDupe = c === 1 && text === (rowMap[rowIdx][0] || '');
-            const cellStyle = `color:${isHeader ? '#58a6ff' : '#8b949e'}; vertical-align:top; max-width:300px; word-break:break-word; ${isDupe ? 'opacity:0.3;' : ''}`;
-            html += `<td data-row="${rowIdx}" data-col="${c}" style="${cellStyle}">${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>`;
+        const cols = rowMap[rowIdx];
+        if (isHeader) {
+            const text = (cols[0] || cols[1] || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const firstCol = cols[0] ? 0 : 1;
+            html += `<div data-row="${rowIdx}" data-col="${firstCol}" ` +
+                    `style="background:#21262d; color:#58a6ff; padding:5px 8px; font-weight:700; ` +
+                    `margin-top:6px; border-left:3px solid #4580f7; cursor:default;">${text}</div>`;
+        } else {
+            for (let c = 0; c < numCols; c++) {
+                const text = (cols[c] || '').trim();
+                if (!text) continue;
+                const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                html += `<div data-row="${rowIdx}" data-col="${c}" ` +
+                        `style="color:#8b949e; padding:3px 8px 3px 14px; font-family:monospace; ` +
+                        `white-space:pre-wrap; word-break:break-word; cursor:pointer;">${safe}</div>`;
+            }
         }
-        html += '</tr>';
     });
-    html += '</table>';
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function renderDocPreview(rawCells) {
+    const container = document.getElementById('doc-preview');
+    if (!container) return;
+    if (!rawCells || rawCells.length === 0) {
+        container.innerHTML = '<span class="text-muted small">No document data</span>';
+        return;
+    }
+
+    const rowMap = {};
+    rawCells.forEach(cell => {
+        if (!rowMap[cell.row]) rowMap[cell.row] = {};
+        rowMap[cell.row][cell.col] = cell.text;
+    });
+
+    const numCols = Math.max(...rawCells.map(c => c.col)) + 1;
+    const headerRows = new Set([0, 2, 4, 6]);
+
+    let html = '<div style="background:#111827; border-radius:6px; padding:10px 14px; font-size:11px; line-height:1.6;">';
+    Object.keys(rowMap).sort((a, b) => +a - +b).forEach(rowIdx => {
+        const isHeader = headerRows.has(+rowIdx);
+        const cols = rowMap[rowIdx];
+        if (isHeader) {
+            const text = (cols[0] || cols[1] || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            html += `<div style="color:#f0c060; font-weight:700; margin-top:10px; margin-bottom:3px; ` +
+                    `border-bottom:1px solid #2d333b; padding-bottom:2px;">${text}</div>`;
+        } else {
+            const parts = [];
+            for (let c = 0; c < numCols; c++) {
+                const t = (cols[c] || '').trim();
+                if (t) parts.push(t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+            }
+            if (parts.length) {
+                html += `<div style="color:#c9d1d9;">${parts.join(' &nbsp;&middot;&nbsp; ')}</div>`;
+            }
+        }
+    });
+    html += '</div>';
     container.innerHTML = html;
 }
 
 function highlightSource(fr) {
-    // Clear all previous highlights
-    document.querySelectorAll('#source-table td').forEach(td => {
-        td.style.border = '';
-        td.style.background = '';
-        // Restore plain text (remove any <mark> wrappers)
-        if (td.querySelector('mark')) {
-            td.textContent = td.textContent;
+    // Clear all previous highlights (now divs, not tds)
+    document.querySelectorAll('#source-table [data-row]').forEach(el => {
+        el.style.outline = '';
+        el.style.background = '';
+        if (el.querySelector('mark')) {
+            el.textContent = el.textContent;
         }
     });
     const warning = document.getElementById('source-warning');
@@ -484,30 +531,28 @@ function highlightSource(fr) {
 
     if (fr.source_cell && colour) {
         const { row, col } = fr.source_cell;
-        const td = document.querySelector(`#source-table td[data-row="${row}"][data-col="${col}"]`);
-        if (td) {
-            td.style.border = `2px solid ${colour.border}`;
-            td.style.background = colour.mark;
-            // Highlight snippet using textContent split (XSS-safe)
+        const el = document.querySelector(`#source-table [data-row="${row}"][data-col="${col}"]`);
+        if (el) {
+            el.style.outline = `2px solid ${colour.border}`;
+            el.style.background = colour.mark;
             if (fr.source_snippet) {
-                const fullText = td.textContent;
+                const fullText = el.textContent;
                 const idx = fullText.indexOf(fr.source_snippet);
                 if (idx !== -1) {
-                    td.textContent = '';
+                    el.textContent = '';
                     const before = document.createTextNode(fullText.slice(0, idx));
                     const mark = document.createElement('mark');
                     mark.style.cssText = `background:${colour.mark}; color:${colour.text}; border-radius:2px; padding:0 2px;`;
                     mark.textContent = fr.source_snippet;
                     const after = document.createTextNode(fullText.slice(idx + fr.source_snippet.length));
-                    td.appendChild(before);
-                    td.appendChild(mark);
-                    td.appendChild(after);
+                    el.appendChild(before);
+                    el.appendChild(mark);
+                    el.appendChild(after);
                 }
             }
-            td.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     } else if (fr.value !== null) {
-        // Value exists but no source cell — possible hallucination
         if (warning) warning.classList.remove('d-none');
     }
 }

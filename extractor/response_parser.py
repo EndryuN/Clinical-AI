@@ -88,7 +88,8 @@ def parse_llm_response(raw_response: str, group: dict) -> dict[str, FieldResult]
     return results
 
 def _extract_json(raw: str) -> dict | None:
-    raw = raw.strip()
+    # Strip qwen3 <think>...</think> blocks before parsing
+    raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
     try:
         return json.loads(raw)
     except json.JSONDecodeError:

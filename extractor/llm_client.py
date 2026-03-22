@@ -128,7 +128,6 @@ def _generate_ollama(prompt: str) -> str:
         "model": _ollama_model,
         "prompt": prompt,
         "stream": False,
-        "format": "json",
         "options": {
             "temperature": 0,
             "num_ctx": 8192

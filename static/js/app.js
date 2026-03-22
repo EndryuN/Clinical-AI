@@ -100,7 +100,10 @@ function startExtraction() {
 
     const limitInput = document.getElementById('patient-limit');
     const limit = limitInput && limitInput.value ? parseInt(limitInput.value) : null;
-    const body = limit ? JSON.stringify({limit: limit}) : '{}';
+    const concurrencyInput = document.getElementById('concurrency');
+    const concurrency = concurrencyInput && concurrencyInput.value ? parseInt(concurrencyInput.value) : 1;
+    
+    const body = JSON.stringify({limit: limit, concurrency: concurrency});
 
     fetch('/extract', {
         method: 'POST',
@@ -116,6 +119,11 @@ function startExtraction() {
         });
 }
 
+function stopExtraction() {
+    if (!confirm('Stop extraction? Progress so far will be saved.')) return;
+    fetch('/stop', { method: 'POST' });
+}
+
 function listenProgress() {
     const source = new EventSource('/progress');
     let timerInterval = null;
@@ -123,7 +131,7 @@ function listenProgress() {
     source.onmessage = function(event) {
         const data = JSON.parse(event.data);
 
-        if (data.status === 'complete') {
+        if (data.status === 'complete' || data.status === 'stopped') {
             source.close();
             if (timerInterval) clearInterval(timerInterval);
             const progressSection = document.getElementById('progress-section');
@@ -133,7 +141,8 @@ function listenProgress() {
             if (progressSection) progressSection.classList.add('d-none');
             if (completeSection) completeSection.classList.remove('d-none');
             if (completeSummary) {
-                completeSummary.textContent = `${data.total} patients processed successfully. Average speed: ${data.average_seconds}s per patient.`;
+                const statusText = data.status === 'stopped' ? 'Extraction stopped.' : 'Extraction complete.';
+                completeSummary.textContent = `${statusText} ${data.current_patient} / ${data.total} patients processed. Average speed: ${data.average_seconds}s per patient.`;
             }
             return;
         }
@@ -142,32 +151,32 @@ function listenProgress() {
 
         const progressBar = document.getElementById('progress-bar');
         const progressText = document.getElementById('progress-text');
-        const currentPatientEl = document.getElementById('current-patient');
+        const activePatientsList = document.getElementById('active-patients-list');
         const averageSpeedEl = document.getElementById('average-speed');
-        const currentTimerEl = document.getElementById('current-timer');
 
         if (progressBar) progressBar.style.width = pct + '%';
         if (progressText) progressText.textContent = `${data.current_patient} / ${data.total} patients`;
-        if (currentPatientEl) {
-            currentPatientEl.textContent = `Patient ${data.current_patient} — ${data.current_group}`;
-        }
         if (averageSpeedEl) {
             averageSpeedEl.textContent = `${data.average_seconds}s / patient`;
         }
 
-        // Update timer
-        if (data.current_patient_start > 0) {
-            if (timerInterval) clearInterval(timerInterval);
-            const start = data.current_patient_start * 1000;
-            const updateTimer = () => {
-                const now = Date.now();
-                const diff = Math.floor((now - start) / 1000);
-                const mins = Math.floor(diff / 60).toString().padStart(2, '0');
-                const secs = (diff % 60).toString().padStart(2, '0');
-                if (currentTimerEl) currentTimerEl.textContent = `${mins}:${secs}`;
-            };
-            updateTimer();
-            timerInterval = setInterval(updateTimer, 1000);
+        // Render active patients
+        if (activePatientsList) {
+            const active = Object.entries(data.active_patients || {});
+            if (active.length === 0) {
+                activePatientsList.innerHTML = '<span class="text-muted small">Waiting...</span>';
+            } else {
+                activePatientsList.innerHTML = active.map(([id, p]) => {
+                    const elapsed = Math.floor((Date.now() - (p.start * 1000)) / 1000);
+                    const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                    const secs = (elapsed % 60).toString().padStart(2, '0');
+                    return `<div class="badge bg-secondary p-2 border border-primary" style="text-align:left; min-width:150px;">` +
+                           `<div class="small fw-bold text-primary">${p.initials || 'Patient'}</div>` +
+                           `<div style="font-size:10px;">${p.group || 'Starting...'}</div>` +
+                           `<div class="mt-1 text-info fw-mono">${mins}:${secs}</div>` +
+                           `</div>`;
+                }).join('');
+            }
         }
 
         // Render completed patients log

@@ -8,10 +8,17 @@
             <h4>Document Parsed</h4>
             <p>File: <span class="text-primary" id="file-name">Loading...</span></p>
             <p>Detected <span class="text-warning fw-bold" id="patient-count">...</span> patients</p>
-            <div class="mb-3">
-                <label class="text-muted small">Patients to process (leave empty for all):</label>
-                <input type="number" id="patient-limit" class="form-control form-control-sm bg-dark text-light"
-                       style="width: 120px; display: inline-block;" min="1" placeholder="All">
+            <div class="mb-3 d-flex gap-3 align-items-end">
+                <div>
+                    <label class="text-muted small">Patients to process:</label>
+                    <input type="number" id="patient-limit" class="form-control form-control-sm bg-dark text-light"
+                           style="width: 100px;" min="1" placeholder="All">
+                </div>
+                <div>
+                    <label class="text-muted small">Parallel processes (1-3):</label>
+                    <input type="number" id="concurrency" class="form-control form-control-sm bg-dark text-light"
+                           style="width: 100px;" min="1" max="5" value="1">
+                </div>
             </div>
             <button id="start-btn" class="btn btn-success btn-lg mt-2" onclick="startExtraction()">
                 &#x25b6; Start Extraction
@@ -19,7 +26,12 @@
         </div>
 
         <div id="progress-section" class="d-none">
-            <h4>Extracting...</h4>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4>Extracting...</h4>
+                <button class="btn btn-outline-danger btn-sm" onclick="stopExtraction()">
+                    &#x25a0; Stop
+                </button>
+            </div>
             <div class="row mb-3">
                 <div class="col-6">
                     <div class="d-flex justify-content-between text-muted small mb-1">
@@ -41,8 +53,8 @@
 
             <div class="card bg-dark border-secondary mb-3">
                 <div class="card-body">
-                    <p class="mb-2">Now processing: <span class="text-primary fw-bold" id="current-patient"></span></p>
-                    <div id="group-badges"></div>
+                    <p class="mb-1 small text-muted">Active processing:</p>
+                    <div id="active-patients-list" class="d-flex flex-wrap gap-2"></div>
                 </div>
             </div>
 

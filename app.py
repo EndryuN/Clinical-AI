@@ -185,36 +185,62 @@ def extract():
 
     data = request.json or {}
     patient_limit = data.get('limit', None)  # Optional: limit number of patients to process
+    concurrency = int(data.get('concurrency', 1))
 
     session.status = 'extracting'
+    session.stop_requested = False
+    session.concurrency = concurrency
 
     # Run extraction in background thread
-    thread = threading.Thread(target=_run_extraction, args=(patient_limit,))
+    thread = threading.Thread(target=_run_extraction, args=(patient_limit, concurrency))
     thread.daemon = True
     thread.start()
 
     return jsonify({"status": "started"})
 
 
-def _run_extraction(patient_limit=None):
+@app.route('/stop', methods=['POST'])
+def stop_extraction():
+    """Request to stop the background extraction thread."""
+    session.stop_requested = True
+    return jsonify({"status": "stop_requested"})
+
+
+def _run_extraction(patient_limit=None, concurrency=1):
     import time
+    from concurrent.futures import ThreadPoolExecutor
     groups = get_groups()
     completed_patients = []
+    session.progress['completed_patients'] = []
 
     patients_to_process = session.patients[:patient_limit] if patient_limit else session.patients
     session.progress['total'] = len(patients_to_process)
     session.progress['patient_times'] = []
+    session.progress['current_patient'] = 0
+    session.progress['active_patients'] = {}
 
-    # Groups that need LLM for fields regex can't handle
-    LLM_GROUPS = {'Endoscopy', 'Baseline CT', 'Surgery', 'Watch and Wait'}
-
-    for i, patient in enumerate(patients_to_process):
-        session.progress['current_patient'] = i + 1
+    def process_single_patient(patient):
+        if session.stop_requested:
+            return None
+            
         patient_start_time = time.time()
-        session.progress['current_patient_start'] = patient_start_time
+        patient_id = patient.id
+        
+        # Add to active list
+        session.progress['active_patients'][patient_id] = {
+            "initials": patient.initials,
+            "group": "",
+            "start": patient_start_time
+        }
+
+        # Groups that need LLM for fields regex can't handle
+        LLM_GROUPS = {'Endoscopy', 'Baseline CT', 'Surgery', 'Watch and Wait'}
 
         for group in groups:
-            session.progress['current_group'] = group['name']
+            if session.stop_requested:
+                break
+                
+            session.progress['active_patients'][patient_id]["group"] = group['name']
 
             try:
                 # Phase 1: Regex extraction (instant, free)
@@ -242,11 +268,12 @@ def _run_extraction(patient_limit=None):
 
                 patient.extractions[group['name']] = results
 
+                # Log event
                 conf_summary = {"high": 0, "medium": 0, "low": 0}
                 for fr in results.values():
                     if fr.confidence in conf_summary:
                         conf_summary[fr.confidence] += 1
-
+                
                 log_event('extraction',
                           patient_id=patient.nhs_number,
                           group=group['name'],
@@ -259,51 +286,51 @@ def _run_extraction(patient_limit=None):
                     f['key']: FieldResult(value=None, confidence='none')
                     for f in group['fields']
                 }
-                log_event('extraction_error',
-                          patient_id=patient.nhs_number,
-                          group=group['name'],
-                          error=str(e))
 
+        # Finalise patient
         patient_end_time = time.time()
         elapsed = patient_end_time - patient_start_time
+        
+        # Remove from active list
+        if patient_id in session.progress['active_patients']:
+            del session.progress['active_patients'][patient_id]
+            
+        session.progress['current_patient'] += 1
         session.progress['patient_times'].append(elapsed)
         session.progress['average_seconds'] = sum(session.progress['patient_times']) / len(session.progress['patient_times'])
 
-        # Track completed patient for SSE progress
-        completed_patients.append({
+        res = {
             "id": patient.id,
             "initials": patient.initials,
             "confidence_summary": _confidence_summary(patient),
             "seconds": round(elapsed, 1)
-        })
-        session.progress['completed_patients'] = completed_patients
+        }
+        session.progress['completed_patients'].append(res)
+        return res
 
-    session.status = 'complete'
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        list(executor.map(process_single_patient, patients_to_process))
+
+    session.status = 'complete' if not session.stop_requested else 'stopped'
 
 
 @app.route('/progress')
 def progress():
     def event_stream():
         import time
-        last_patient = 0
-        last_group = ""
-        while session.status == 'extracting' or session.status == 'complete':
-            current = session.progress.get('current_patient', 0)
-            group = session.progress.get('current_group', '')
-            
+        while session.status == 'extracting' or session.status == 'complete' or session.status == 'stopped':
             # Send update if patient changed, group changed, or every 2 seconds for timer
             event_data = {
                 "current_patient": session.progress['current_patient'],
                 "total": session.progress['total'],
-                "current_group": session.progress.get('current_group', ''),
+                "active_patients": session.progress.get('active_patients', {}),
                 "completed_patients": session.progress.get('completed_patients', []),
                 "average_seconds": round(session.progress.get('average_seconds', 0), 1),
-                "current_patient_start": session.progress.get('current_patient_start', 0),
                 "status": session.status
             }
             yield f"data: {json.dumps(event_data)}\n\n"
             
-            if session.status == 'complete':
+            if session.status in ('complete', 'stopped'):
                 break
                 
             time.sleep(2)

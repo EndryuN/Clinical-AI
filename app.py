@@ -325,7 +325,8 @@ def _run_extraction(patient_limit=None, concurrency=1):
             return
         task_key = f"{patient.id}:{group['name']}"
         session.progress['active_patients'][task_key] = {
-            "initials": patient.initials, "group": group['name'], "start": time.time()
+            "initials": patient.initials, "group": group['name'], "start": time.time(),
+            "status": "queued"
         }
         with llm_semaphore:
             # Re-check after acquiring the semaphore: a waiting thread may have been
@@ -333,6 +334,7 @@ def _run_extraction(patient_limit=None, concurrency=1):
             if session.stop_requested:
                 del session.progress['active_patients'][task_key]
                 return
+            session.progress['active_patients'][task_key]['status'] = 'running'
             try:
                 prompt = build_prompt(patient.raw_text, group)
                 raw_response = generate(prompt)

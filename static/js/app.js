@@ -232,13 +232,20 @@ function listenProgress() {
             }
         }
 
-        if (progressText) progressText.textContent = `${data.current_patient} / ${data.total} patients`;
+        // Regex label: always show actual regex counts
+        if (progressText) {
+            const regexDone = data.regex_complete || 0;
+            if (phase === 'llm' || phase === 'complete') {
+                progressText.textContent = `${regexDone} / ${total} ✓`;
+            } else {
+                progressText.textContent = `${regexDone} / ${total} patients`;
+            }
+        }
 
+        // LLM label: groups processed
         if (phaseDetail) {
             if (phase === 'llm') {
                 phaseDetail.textContent = `${data.llm_complete || 0} / ${llmTotal} groups`;
-            } else if (phase === 'regex') {
-                phaseDetail.textContent = '';
             } else {
                 phaseDetail.textContent = '';
             }
@@ -259,11 +266,14 @@ function listenProgress() {
                     const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
                     const secs = (elapsed % 60).toString().padStart(2, '0');
                     const isRegex = p.group === 'Regex';
-                    const accentColor = isRegex ? '#198754' : '#0d6efd';
-                    return `<div style="background:#111827; border:1px solid ${accentColor}; border-radius:6px; padding:8px 12px; min-width:155px;">` +
+                    const isQueued = p.status === 'queued';
+                    const accentColor = isRegex ? '#198754' : isQueued ? '#4b5563' : '#0d6efd';
+                    const timerColor = isQueued ? '#6b7280' : '#f59e0b';
+                    const groupLabel = isQueued ? `⏳ ${p.group}` : p.group || 'Starting...';
+                    return `<div style="background:#111827; border:1px solid ${accentColor}; border-radius:6px; padding:8px 12px; min-width:155px; opacity:${isQueued ? '0.6' : '1'};">` +
                            `<div style="font-size:12px; font-weight:700; color:#f0f0f0; letter-spacing:0.5px;">${p.initials || 'Patient'}</div>` +
-                           `<div style="font-size:10px; color:#9ca3af; margin-top:2px;">${p.group || 'Starting...'}</div>` +
-                           `<div style="font-size:14px; font-weight:700; color:#f59e0b; font-family:monospace; margin-top:4px;">${mins}:${secs}</div>` +
+                           `<div style="font-size:10px; color:#9ca3af; margin-top:2px;">${groupLabel}</div>` +
+                           `<div style="font-size:14px; font-weight:700; color:${timerColor}; font-family:monospace; margin-top:4px;">${mins}:${secs}</div>` +
                            `</div>`;
                 }).join('');
             }

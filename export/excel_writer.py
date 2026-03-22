@@ -85,11 +85,13 @@ def write_excel(patients: list, output_path: str):
     ws_meta = wb.create_sheet("Metadata")
     ws_meta.sheet_state = 'hidden'
     ws_meta.append(["patient_id", "field_key", "confidence", "reason"])
-    for patient in patients:
-        # Use MRN as patient_id to match the identifier _import_excel reconstructs
+    for idx, patient in enumerate(patients):
+        # Use MRN as patient_id to match the identifier _import_excel reconstructs.
+        # Fallback uses 1-based index with 3-digit padding to match the importer's
+        # f"patient_{row_idx - 1:03d}" scheme (row_idx starts at 2, so patient 1 → patient_001).
         demo = patient.extractions.get("Demographics", {})
         mrn_fr = demo.get("mrn")
-        meta_pid = (mrn_fr.value if mrn_fr and mrn_fr.value else None) or patient.id
+        meta_pid = (mrn_fr.value if mrn_fr and mrn_fr.value else None) or f"patient_{idx + 1:03d}"
         for group_name, fields in patient.extractions.items():
             for field_key, fr in fields.items():
                 ws_meta.append([

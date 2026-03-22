@@ -129,7 +129,7 @@ def _import_excel(file_path: str) -> list:
     if "Metadata" in wb.sheetnames:
         ws_meta = wb["Metadata"]
         for row in ws_meta.iter_rows(min_row=2, values_only=True):
-            pid, fkey, conf, reason = row
+            pid, fkey, conf, reason, *_ = row
             if pid and fkey:
                 meta_lookup[(str(pid), str(fkey))] = {
                     "confidence": conf or 'high',
@@ -147,6 +147,7 @@ def _import_excel(file_path: str) -> list:
             continue
 
         # Determine patient_id early (needed for meta_lookup)
+        # Early MRN read: needed before extractions loop for Metadata sheet lookup
         mrn_col = next((f['excel_column'] for f in all_fields if f['key'] == 'mrn'), None)
         mrn_cell_val = ws.cell(row=row_idx, column=mrn_col).value if mrn_col else None
         patient_id = str(mrn_cell_val).strip() if mrn_cell_val else f"patient_{row_idx - 1:03d}"

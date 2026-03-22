@@ -40,6 +40,7 @@ groups:
         type: string
 
   - name: Endoscopy
+    llm_required: true
     color: "#6AB0E3"
     description: "Endoscopy procedure details"
     fields:
@@ -115,6 +116,7 @@ groups:
         type: string
 
   - name: Baseline CT
+    llm_required: true
     color: "#F0C75E"
     description: "Baseline CT imaging results"
     fields:
@@ -285,6 +287,7 @@ groups:
         type: text
 
   - name: Surgery
+    llm_required: true
     color: "#F0C75E"
     description: "Surgical intervention details"
     fields:
@@ -405,6 +408,7 @@ groups:
         type: text
 
   - name: Watch and Wait
+    llm_required: true
     color: "#7BC67E"
     description: "Watch and wait surveillance programme"
     fields:

@@ -124,6 +124,18 @@ def _table_to_text(table) -> str:
     return "\n\n".join(parts)
 
 
+def _table_to_cells(table) -> list[dict]:
+    """Return all cells in the table as a flat list with stable row/col coordinates.
+
+    Empty cells are included so row/col indices are stable for source highlighting.
+    """
+    cells = []
+    for i, row in enumerate(table.rows):
+        for j, cell in enumerate(row.cells):
+            cells.append({"row": i, "col": j, "text": cell.text.strip()})
+    return cells
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -194,6 +206,7 @@ def parse_docx(file_path: str) -> list[PatientBlock]:
             patient_id = f"PATIENT_{idx + 1:03d}"
 
         raw_text = _table_to_text(table)
+        raw_cells = _table_to_cells(table)
 
         # Prepend the MDT meeting info to the raw text so the LLM can extract it
         mdt_header = mdt_headers[idx] if idx < len(mdt_headers) else {}
@@ -208,6 +221,7 @@ def parse_docx(file_path: str) -> list[PatientBlock]:
             initials=_initials(name) if name else "",
             nhs_number=nhs,
             raw_text=raw_text,
+            raw_cells=raw_cells,
         ))
 
     return patients

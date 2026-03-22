@@ -12,20 +12,16 @@ if os.path.exists(_env_path):
                 _key, _val = _line.split('=', 1)
                 os.environ.setdefault(_key.strip(), _val.strip())
 
-# --- Backend selection ---
+# --- Settings ---
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-
-# Ollama settings
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "llama3.1:8b"
-
-# Claude settings
+OLLAMA_URL = "http://localhost:11434"
 CLAUDE_URL = "https://api.anthropic.com/v1/messages"
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 TIMEOUT = 120
 
-# Runtime backend choice — can be switched via set_backend()
+# Runtime state
 _backend = "claude" if ANTHROPIC_API_KEY else "ollama"
+_ollama_model = "qwen2.5:14b-instruct"  # default local model
 
 
 def get_backend() -> str:
@@ -39,20 +35,36 @@ def set_backend(backend: str):
     _backend = backend
 
 
-def check_ollama_available() -> bool:
-    """Check if Ollama is running and has the model."""
+def get_ollama_model() -> str:
+    return _ollama_model
+
+
+def set_ollama_model(model: str):
+    global _ollama_model
+    _ollama_model = model
+
+
+def list_ollama_models() -> list[str]:
+    """Return list of models available in Ollama."""
     try:
-        resp = requests.get("http://localhost:11434/api/tags", timeout=5)
-        if resp.status_code != 200:
-            return False
-        models = [m['name'] for m in resp.json().get('models', [])]
-        return any(OLLAMA_MODEL.split(':')[0] in m for m in models)
+        resp = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+        if resp.status_code == 200:
+            return [m['name'] for m in resp.json().get('models', [])]
+    except requests.ConnectionError:
+        pass
+    return []
+
+
+def check_ollama_available() -> bool:
+    """Check if Ollama is running and has at least one model."""
+    try:
+        resp = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+        return resp.status_code == 200 and len(resp.json().get('models', [])) > 0
     except requests.ConnectionError:
         return False
 
 
 def check_claude_available() -> bool:
-    """Check if Claude API key is set."""
     return bool(ANTHROPIC_API_KEY)
 
 
@@ -102,7 +114,7 @@ def _generate_claude(prompt: str) -> str:
 
 def _generate_ollama(prompt: str) -> str:
     payload = {
-        "model": OLLAMA_MODEL,
+        "model": _ollama_model,
         "prompt": prompt,
         "stream": False,
         "format": "json",
@@ -112,7 +124,7 @@ def _generate_ollama(prompt: str) -> str:
         }
     }
     try:
-        resp = requests.post(OLLAMA_URL, json=payload, timeout=TIMEOUT)
+        resp = requests.post(f"{OLLAMA_URL}/api/generate", json=payload, timeout=TIMEOUT)
         resp.raise_for_status()
         return resp.json().get('response', '')
     except requests.ConnectionError:

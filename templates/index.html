@@ -11,8 +11,8 @@
         <div class="card bg-dark border-secondary mb-4">
             <div class="card-body">
                 <h6 class="text-muted mb-3">Choose LLM Backend</h6>
-                <div class="d-flex justify-content-center gap-3">
-                    <div class="form-check form-check-inline">
+                <div class="d-flex justify-content-center gap-4 mb-3">
+                    <div class="form-check">
                         <input class="form-check-input" type="radio" name="backend" id="backend-claude"
                                value="claude" {{ 'checked' if current_backend == 'claude' else '' }}
                                {{ 'disabled' if not claude_available else '' }}
@@ -26,7 +26,7 @@
                             {% endif %}
                         </label>
                     </div>
-                    <div class="form-check form-check-inline">
+                    <div class="form-check">
                         <input class="form-check-input" type="radio" name="backend" id="backend-ollama"
                                value="ollama" {{ 'checked' if current_backend == 'ollama' else '' }}
                                {{ 'disabled' if not ollama_available else '' }}
@@ -41,12 +41,28 @@
                         </label>
                     </div>
                 </div>
+
+                <!-- Ollama Model Selector -->
+                <div id="ollama-model-section" style="{{ 'display:none' if current_backend == 'claude' else '' }}">
+                    <label class="text-muted small mb-1">Ollama Model:</label>
+                    <select id="ollama-model-select" class="form-select form-select-sm bg-dark text-light border-secondary mx-auto"
+                            style="max-width: 300px;"
+                            onchange="switchModel(this.value)">
+                        {% for model in ollama_models %}
+                        <option value="{{ model }}" {{ 'selected' if model == current_ollama_model else '' }}>{{ model }}</option>
+                        {% endfor %}
+                        {% if not ollama_models %}
+                        <option value="qwen2.5:14b-instruct">qwen2.5:14b-instruct (not pulled)</option>
+                        {% endif %}
+                    </select>
+                </div>
+
                 <div class="mt-2">
                     <small id="backend-info" class="text-muted">
                         {% if current_backend == 'claude' %}
                         Using Claude Haiku API — fast, requires internet
                         {% else %}
-                        Using Ollama locally — slower, fully private
+                        Using {{ current_ollama_model }} locally — fully private
                         {% endif %}
                     </small>
                 </div>
@@ -78,6 +94,13 @@
 {% block scripts %}
 <script>
 function switchBackend(backend) {
+    const modelSection = document.getElementById('ollama-model-section');
+    if (backend === 'ollama') {
+        modelSection.style.display = '';
+    } else {
+        modelSection.style.display = 'none';
+    }
+
     fetch('/backend', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -87,8 +110,19 @@ function switchBackend(backend) {
         if (data.backend === 'claude') {
             info.textContent = 'Using Claude Haiku API \u2014 fast, requires internet';
         } else {
-            info.textContent = 'Using Ollama locally \u2014 slower, fully private';
+            info.textContent = 'Using ' + data.ollama_model + ' locally \u2014 fully private';
         }
+    });
+}
+
+function switchModel(model) {
+    fetch('/backend', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({backend: 'ollama', ollama_model: model})
+    }).then(r => r.json()).then(data => {
+        document.getElementById('backend-info').textContent =
+            'Using ' + data.ollama_model + ' locally \u2014 fully private';
     });
 }
 </script>

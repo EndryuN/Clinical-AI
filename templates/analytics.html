@@ -9,66 +9,68 @@
     <div class="col-12 mb-3">
         <h4 class="text-muted">Extraction Analytics</h4>
     </div>
-    <div class="col-md-4">
-        <div class="card bg-dark border-secondary">
+
+    <!-- Row 1: Cancer Type + Treatment Approaches -->
+    <div class="col-md-6 mb-3">
+        <div class="card bg-dark border-secondary h-100">
             <div class="card-body">
                 <h6 class="card-title text-muted">Cancer Type Distribution</h6>
-                <canvas id="cancer-chart"></canvas>
+                <div style="max-height: 280px; position: relative;">
+                    <canvas id="cancer-chart"></canvas>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card bg-dark border-secondary">
+    <div class="col-md-6 mb-3">
+        <div class="card bg-dark border-secondary h-100">
             <div class="card-body">
                 <h6 class="card-title text-muted">Treatment Approaches</h6>
-                <canvas id="treatment-chart"></canvas>
+                <div style="max-height: 280px; position: relative;">
+                    <canvas id="treatment-chart"></canvas>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card bg-dark border-secondary">
+
+    <!-- Row 2: Extraction Confidence + Column Analysis selector -->
+    <div class="col-md-3 mb-3">
+        <div class="card bg-dark border-secondary h-100">
             <div class="card-body">
                 <h6 class="card-title text-muted">Extraction Confidence</h6>
                 <canvas id="confidence-chart"></canvas>
             </div>
         </div>
     </div>
-</div>
-
-<!-- Column Analysis Section -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card bg-dark border-secondary">
+    <div class="col-md-9 mb-3">
+        <div class="card bg-dark border-secondary h-100">
             <div class="card-body">
                 <h5 class="text-muted mb-3">Column Analysis</h5>
-                <div class="row">
-                    <div class="col-md-4">
-                        <label class="text-muted small mb-1">Select a field to analyse:</label>
-                        <select id="column-select" class="form-select bg-dark text-light border-secondary"
-                                onchange="analyseColumn(this.value)">
-                            <option value="">-- Choose a field --</option>
-                        </select>
-                    </div>
-                    <div class="col-md-8" id="column-results" style="display:none;">
-                        <div class="row mt-2">
-                            <!-- Summary stats -->
-                            <div class="col-md-6">
-                                <div class="card bg-black border-secondary">
-                                    <div class="card-body">
-                                        <h6 class="text-muted mb-3" id="stats-title">Statistics</h6>
-                                        <table class="table table-dark table-sm mb-0">
-                                            <tbody id="stats-table"></tbody>
-                                        </table>
-                                    </div>
+                <div class="mb-3">
+                    <label class="text-muted small mb-1">Select a field to analyse:</label>
+                    <select id="column-select" class="form-select form-select-sm bg-dark text-light border-secondary" style="max-width: 300px;"
+                            onchange="analyseColumn(this.value)">
+                        <option value="">-- Choose a field --</option>
+                    </select>
+                </div>
+                <div id="column-results" style="display:none;">
+                    <div class="row">
+                        <!-- Summary stats -->
+                        <div class="col-md-5">
+                            <div class="card bg-black border-secondary">
+                                <div class="card-body py-2">
+                                    <h6 class="text-muted mb-2" id="stats-title" style="font-size:13px;">Statistics</h6>
+                                    <table class="table table-dark table-sm mb-0" style="font-size:12px;">
+                                        <tbody id="stats-table"></tbody>
+                                    </table>
                                 </div>
                             </div>
-                            <!-- Value distribution chart -->
-                            <div class="col-md-6">
-                                <div class="card bg-black border-secondary">
-                                    <div class="card-body">
-                                        <h6 class="text-muted mb-3">Value Distribution</h6>
-                                        <canvas id="column-chart"></canvas>
-                                    </div>
+                        </div>
+                        <!-- Value distribution chart -->
+                        <div class="col-md-7">
+                            <div class="card bg-black border-secondary">
+                                <div class="card-body py-2">
+                                    <h6 class="text-muted mb-2" style="font-size:13px;">Value Distribution</h6>
+                                    <canvas id="column-chart"></canvas>
                                 </div>
                             </div>
                         </div>

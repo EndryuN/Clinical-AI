@@ -16,9 +16,11 @@ from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Response, send_file, stream_with_context
 from models import ExtractionSession, PatientBlock, FieldResult
 from parser.docx_parser import parse_docx, get_raw_text
-from extractor.llm_client import check_ollama, generate, get_backend, set_backend, check_ollama_available, check_claude_available
+from extractor.llm_client import (check_ollama, generate, get_backend, set_backend,
+    check_ollama_available, check_claude_available, list_ollama_models, get_ollama_model, set_ollama_model)
 from extractor.prompt_builder import build_prompt, build_all_prompts
 from extractor.response_parser import parse_llm_response
+from extractor.regex_extractor import regex_extract
 from export.excel_writer import write_excel
 from config import get_groups, get_all_fields
 from audit import log_event
@@ -38,7 +40,9 @@ def index():
                            session_active=(session.status == 'complete'),
                            current_backend=get_backend(),
                            ollama_available=check_ollama_available(),
-                           claude_available=check_claude_available())
+                           claude_available=check_claude_available(),
+                           ollama_models=list_ollama_models(),
+                           current_ollama_model=get_ollama_model())
 
 
 @app.route('/upload', methods=['POST'])
@@ -198,6 +202,9 @@ def _run_extraction(patient_limit=None):
     patients_to_process = session.patients[:patient_limit] if patient_limit else session.patients
     session.progress['total'] = len(patients_to_process)
 
+    # Groups that need LLM for fields regex can't handle
+    LLM_GROUPS = {'Endoscopy', 'Baseline CT', 'Surgery', 'Watch and Wait'}
+
     for i, patient in enumerate(patients_to_process):
         session.progress['current_patient'] = i + 1
 
@@ -205,15 +212,28 @@ def _run_extraction(patient_limit=None):
             session.progress['current_group'] = group['name']
 
             try:
-                prompt = build_prompt(patient.raw_text, group)
-                raw_response = generate(prompt)
-                results = parse_llm_response(raw_response, group)
+                # Phase 1: Regex extraction (instant, free)
+                results = regex_extract(patient.raw_text, group['name'], group['fields'])
 
-                # Retry once if all fields are null (likely malformed response)
-                all_null = all(fr.value is None for fr in results.values())
-                if all_null and len(group['fields']) > 0:
-                    raw_response = generate(prompt)
-                    results = parse_llm_response(raw_response, group)
+                # Count how many fields regex filled
+                regex_filled = sum(1 for fr in results.values() if fr.value is not None)
+                total_fields = len(group['fields'])
+                gaps = total_fields - regex_filled
+
+                # Phase 2: LLM fills gaps (only if there are gaps AND group benefits from LLM)
+                if gaps > 0 and group['name'] in LLM_GROUPS:
+                    try:
+                        prompt = build_prompt(patient.raw_text, group)
+                        raw_response = generate(prompt)
+                        llm_results = parse_llm_response(raw_response, group)
+
+                        # Merge: LLM fills only empty fields, doesn't overwrite regex
+                        for key, llm_fr in llm_results.items():
+                            if key in results and results[key].value is None and llm_fr.value is not None:
+                                llm_fr.reason = f"[LLM] {llm_fr.reason}"
+                                results[key] = llm_fr
+                    except Exception:
+                        pass  # Regex results are still valid
 
                 patient.extractions[group['name']] = results
 
@@ -225,11 +245,13 @@ def _run_extraction(patient_limit=None):
                 log_event('extraction',
                           patient_id=patient.nhs_number,
                           group=group['name'],
-                          fields_extracted=len(results),
+                          fields_extracted=sum(1 for fr in results.values() if fr.value is not None),
+                          regex_filled=regex_filled,
+                          llm_filled=sum(1 for fr in results.values() if fr.value is not None) - regex_filled,
                           confidence_summary=conf_summary)
             except Exception as e:
                 patient.extractions[group['name']] = {
-                    f['key']: FieldResult(value=None, confidence='low')
+                    f['key']: FieldResult(value=None, confidence='none')
                     for f in group['fields']
                 }
                 log_event('extraction_error',
@@ -543,16 +565,20 @@ def debug_raw_text():
 
 @app.route('/backend', methods=['GET', 'POST'])
 def backend():
-    """Get or set the LLM backend."""
+    """Get or set the LLM backend and model."""
     if request.method == 'POST':
         data = request.json or {}
         choice = data.get('backend', 'ollama')
         set_backend(choice)
-        return jsonify({"status": "ok", "backend": get_backend()})
+        if 'ollama_model' in data:
+            set_ollama_model(data['ollama_model'])
+        return jsonify({"status": "ok", "backend": get_backend(), "ollama_model": get_ollama_model()})
     return jsonify({
         "backend": get_backend(),
         "ollama_available": check_ollama_available(),
-        "claude_available": check_claude_available()
+        "claude_available": check_claude_available(),
+        "ollama_model": get_ollama_model(),
+        "ollama_models": list_ollama_models()
     })
 
 

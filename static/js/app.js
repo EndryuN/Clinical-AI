@@ -521,7 +521,6 @@ function renderFieldTable(fields, groupName) {
         const confClass = !hasValue ? 'secondary' :
                           isInferred ? 'danger' :
                           fr.confidence === 'high' ? 'success' :
-                          fr.confidence === 'medium' ? 'warning' :
                           fr.confidence === 'none' ? 'secondary' : 'danger';
         const confText = !hasValue ? (isPending ? 'PENDING' : 'EMPTY') :
                          isInferred ? 'INFERRED' :
@@ -605,6 +604,11 @@ function initLiveReview() {
                     loadPatients();
                 }
             };
+
+            source.onerror = function() {
+                source.close();
+            };
+
             window.addEventListener('beforeunload', () => source.close());
         })
         .catch(() => {});

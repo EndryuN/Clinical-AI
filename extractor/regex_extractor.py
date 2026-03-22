@@ -11,7 +11,7 @@ import re
 from models import FieldResult
 
 
-def regex_extract(raw_text: str, group_name: str, fields: list[dict], raw_cells: list[dict] = None) -> dict[str, FieldResult]:
+def regex_extract(raw_text: str, group_name: str, fields: list[dict], raw_cells: list[dict] | None = None) -> dict[str, FieldResult]:
     """Extract fields from raw text using regex. Returns dict of field_key -> FieldResult.
 
     Fields that can't be extracted by regex are returned with value=None, confidence='none'.
@@ -314,7 +314,7 @@ def _extract_baseline_mri(text: str) -> dict:
                   text, re.DOTALL | re.IGNORECASE)
     if m:
         date_raw = m.group(1)
-        mri_header_span = m.group(0)[:m.group(0).index(date_raw) + len(date_raw)]
+        mri_header_span = m.group(0)[:m.start(1) - m.start() + len(m.group(1))]
         result['baseline_mri_date'] = (_normalize_date(date_raw), mri_header_span)
         mri_text = m.group(2)
 
@@ -349,7 +349,7 @@ def _extract_baseline_ct(text: str) -> dict:
                   text, re.DOTALL | re.IGNORECASE)
     if m:
         date_raw = m.group(1)
-        ct_header_span = m.group(0)[:m.group(0).index(date_raw) + len(date_raw)]
+        ct_header_span = m.group(0)[:m.start(1) - m.start() + len(m.group(1))]
         result['baseline_ct_date'] = (_normalize_date(date_raw), ct_header_span)
         ct_text = m.group(2)
 
@@ -526,7 +526,7 @@ def _extract_second_mri(text: str) -> dict:
     if len(mri_mentions) >= 2:
         m = mri_mentions[1]  # second MRI
         date_raw = m.group(1)
-        mri_header_span = m.group(0)[:m.group(0).index(date_raw) + len(date_raw)]
+        mri_header_span = m.group(0)[:m.start(1) - m.start() + len(m.group(1))]
         result['second_mri_date'] = (_normalize_date(date_raw), mri_header_span)
         mri_text = m.group(2)
 
@@ -562,7 +562,7 @@ def _extract_12week_mri(text: str) -> dict:
     if mri_mentions:
         m = mri_mentions[0]
         date_raw = m.group(1)
-        mri_header_span = m.group(0)[:m.group(0).index(date_raw) + len(date_raw)]
+        mri_header_span = m.group(0)[:m.start(1) - m.start() + len(m.group(1))]
         result['week12_mri_date'] = (date_raw, mri_header_span)
         mri_text = m.group(2)
 
@@ -591,7 +591,7 @@ def _extract_flexsig(text: str) -> dict:
     m = re.search(r'(?:flexi(?:ble)?\s*sig(?:moidoscopy)?|flex\s*sig)\s*(?:on\s*)?(\d{1,2}/\d{1,2}/\d{4})\s*:?\s*(.*?)(?=\n\n|MDT|Outcome|$)',
                   text, re.DOTALL | re.IGNORECASE)
     if m:
-        result['flexsig_date'] = (m.group(1), m.group(0)[:m.group(0).index(m.group(1)) + len(m.group(1))])
+        result['flexsig_date'] = (m.group(1), m.group(0)[:m.start(1) - m.start() + len(m.group(1))])
         findings = m.group(2).strip()
         if findings:
             result['flexsig_findings'] = (findings, m.group(0))

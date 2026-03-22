@@ -37,7 +37,7 @@ session = ExtractionSession()
 @app.route('/')
 def index():
     return render_template('index.html',
-                           session_active=(session.status == 'complete'),
+                           session_active=bool(session.patients),
                            current_backend=get_backend(),
                            ollama_available=check_ollama_available(),
                            claude_available=check_claude_available(),
@@ -326,6 +326,11 @@ def _run_extraction(patient_limit=None, concurrency=1):
             "initials": patient.initials, "group": group['name'], "start": time.time()
         }
         with llm_semaphore:
+            # Re-check after acquiring the semaphore: a waiting thread may have been
+            # queued before stop was requested, so skip its LLM call now.
+            if session.stop_requested:
+                del session.progress['active_patients'][task_key]
+                return
             try:
                 prompt = build_prompt(patient.raw_text, group)
                 raw_response = generate(prompt)
@@ -387,7 +392,7 @@ def progress():
 
 @app.route('/process')
 def process_page():
-    return render_template('process.html', session_active=(session.status == 'complete'))
+    return render_template('process.html', session_active=bool(session.patients))
 
 
 @app.route('/patients')
@@ -653,7 +658,7 @@ def _dob_to_age(dob_str: str):
 
 @app.route('/analytics-page')
 def analytics_page():
-    return render_template('analytics.html', session_active=(session.status == 'complete'))
+    return render_template('analytics.html', session_active=bool(session.patients))
 
 
 @app.route('/schema')
@@ -669,7 +674,7 @@ def schema():
 
 @app.route('/review')
 def review_page():
-    return render_template('review.html', session_active=(session.status == 'complete'))
+    return render_template('review.html', session_active=bool(session.patients))
 
 
 @app.route('/audit')

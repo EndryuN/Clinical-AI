@@ -81,14 +81,35 @@ function showUploadError(msg) {
 
 // ===== Process Page =====
 function initProcessPage() {
-    const data = JSON.parse(sessionStorage.getItem('upload_result') || 'null');
-    const fileName = sessionStorage.getItem('file_name') || 'Unknown file';
-
-    const fileNameEl = document.getElementById('file-name');
-    const patientCountEl = document.getElementById('patient-count');
-
-    if (fileNameEl) fileNameEl.textContent = fileName;
-    if (patientCountEl) patientCountEl.textContent = data ? data.patients_detected : '?';
+    // If extraction is already running (user navigated back), resume live view
+    fetch('/status')
+        .then(r => r.json())
+        .then(status => {
+            if (status.status === 'extracting') {
+                const parseResult = document.getElementById('parse-result');
+                const progressSection = document.getElementById('progress-section');
+                if (parseResult) parseResult.classList.add('d-none');
+                if (progressSection) progressSection.classList.remove('d-none');
+                listenProgress();
+                return;
+            }
+            // Normal init from sessionStorage
+            const data = JSON.parse(sessionStorage.getItem('upload_result') || 'null');
+            const fileName = sessionStorage.getItem('file_name') || 'Unknown file';
+            const fileNameEl = document.getElementById('file-name');
+            const patientCountEl = document.getElementById('patient-count');
+            if (fileNameEl) fileNameEl.textContent = fileName;
+            if (patientCountEl) patientCountEl.textContent = data ? data.patients_detected : '?';
+        })
+        .catch(() => {
+            // Fallback to sessionStorage if /status unreachable
+            const data = JSON.parse(sessionStorage.getItem('upload_result') || 'null');
+            const fileName = sessionStorage.getItem('file_name') || 'Unknown file';
+            const fileNameEl = document.getElementById('file-name');
+            const patientCountEl = document.getElementById('patient-count');
+            if (fileNameEl) fileNameEl.textContent = fileName;
+            if (patientCountEl) patientCountEl.textContent = data ? data.patients_detected : '?';
+        });
 }
 
 function startExtraction() {
@@ -122,6 +143,14 @@ function startExtraction() {
 function stopExtraction() {
     if (!confirm('Stop extraction? Progress so far will be saved.')) return;
     fetch('/stop', { method: 'POST' });
+    // Show immediate visual feedback — server will confirm via SSE
+    const stopBtn = document.querySelector('[onclick="stopExtraction()"]');
+    if (stopBtn) {
+        stopBtn.textContent = 'Stopping…';
+        stopBtn.disabled = true;
+    }
+    const phaseLabel = document.getElementById('phase-label');
+    if (phaseLabel) { phaseLabel.textContent = 'Stopping…'; phaseLabel.style.background = '#dc3545'; }
 }
 
 function listenProgress() {
@@ -147,20 +176,65 @@ function listenProgress() {
             return;
         }
 
-        const pct = data.total > 0 ? (data.current_patient / data.total * 100).toFixed(0) : 0;
+        const phase = data.phase || 'idle';
+
+        // Phase-aware progress calculation
+        let pct = 0;
+        if (phase === 'regex' && data.total > 0) {
+            pct = ((data.regex_complete || 0) / data.total * 100).toFixed(0);
+        } else if (phase === 'llm' || phase === 'complete') {
+            const llmTotal = data.llm_queue_size || 0;
+            pct = llmTotal > 0 ? ((data.llm_complete || 0) / llmTotal * 100).toFixed(0) : 100;
+        }
 
         const progressBar = document.getElementById('progress-bar');
         const progressText = document.getElementById('progress-text');
+        const phaseLabel = document.getElementById('phase-label');
+        const phaseDetail = document.getElementById('phase-detail');
         const activePatientsList = document.getElementById('active-patients-list');
         const averageSpeedEl = document.getElementById('average-speed');
 
-        if (progressBar) progressBar.style.width = pct + '%';
+        // Phase-aware progress bar colour + animation
+        if (progressBar) {
+            progressBar.style.width = pct + '%';
+            if (phase === 'regex') {
+                progressBar.className = 'progress-bar bg-success progress-bar-striped progress-bar-animated';
+            } else if (phase === 'llm') {
+                progressBar.className = 'progress-bar bg-primary';
+            } else {
+                progressBar.className = 'progress-bar bg-success';
+            }
+        }
+
         if (progressText) progressText.textContent = `${data.current_patient} / ${data.total} patients`;
+
+        if (phaseLabel) {
+            if (phase === 'regex') {
+                phaseLabel.textContent = 'Phase 1: Regex';
+                phaseLabel.style.cssText = 'background:#198754; color:#fff; font-size:9px; vertical-align:middle;';
+            } else if (phase === 'llm') {
+                phaseLabel.textContent = 'Phase 2: LLM';
+                phaseLabel.style.cssText = 'background:#0d6efd; color:#fff; font-size:9px; vertical-align:middle;';
+            } else {
+                phaseLabel.textContent = '';
+            }
+        }
+
+        if (phaseDetail) {
+            if (phase === 'regex') {
+                phaseDetail.textContent = `Regex sweep: ${data.regex_complete || 0} / ${data.total} patients`;
+            } else if (phase === 'llm') {
+                phaseDetail.textContent = `LLM queue: ${data.llm_complete || 0} / ${data.llm_queue_size || 0} groups`;
+            } else {
+                phaseDetail.textContent = '';
+            }
+        }
+
         if (averageSpeedEl) {
             averageSpeedEl.textContent = `${data.average_seconds}s / patient`;
         }
 
-        // Render active patients
+        // Render active patients — improved card styling
         if (activePatientsList) {
             const active = Object.entries(data.active_patients || {});
             if (active.length === 0) {
@@ -170,16 +244,18 @@ function listenProgress() {
                     const elapsed = Math.floor((Date.now() - (p.start * 1000)) / 1000);
                     const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
                     const secs = (elapsed % 60).toString().padStart(2, '0');
-                    return `<div class="badge bg-secondary p-2 border border-primary" style="text-align:left; min-width:150px;">` +
-                           `<div class="small fw-bold text-primary">${p.initials || 'Patient'}</div>` +
-                           `<div style="font-size:10px;">${p.group || 'Starting...'}</div>` +
-                           `<div class="mt-1 text-info fw-mono">${mins}:${secs}</div>` +
+                    const isRegex = p.group === 'Regex';
+                    const accentColor = isRegex ? '#198754' : '#0d6efd';
+                    return `<div style="background:#111827; border:1px solid ${accentColor}; border-radius:6px; padding:8px 12px; min-width:155px;">` +
+                           `<div style="font-size:12px; font-weight:700; color:#f0f0f0; letter-spacing:0.5px;">${p.initials || 'Patient'}</div>` +
+                           `<div style="font-size:10px; color:#9ca3af; margin-top:2px;">${p.group || 'Starting...'}</div>` +
+                           `<div style="font-size:14px; font-weight:700; color:#f59e0b; font-family:monospace; margin-top:4px;">${mins}:${secs}</div>` +
                            `</div>`;
                 }).join('');
             }
         }
 
-        // Render completed patients log
+        // Render completed patients log — medium in red to match badge colour
         if (data.completed_patients && data.completed_patients.length > 0) {
             const log = document.getElementById('completed-log');
             if (log) {
@@ -189,8 +265,8 @@ function listenProgress() {
                     return `<div class="text-muted py-1 d-flex justify-content-between">` +
                         `<span>&#x2713; ${p.initials || p.id} &middot; ` +
                         `<span class="text-success">${c.high || 0} high</span> &middot; ` +
-                        `<span class="text-warning">${c.medium || 0} med</span> &middot; ` +
-                        `<span class="text-danger">${c.low || 0} low</span></span>` +
+                        `<span class="text-danger">${c.medium || 0} med</span> &middot; ` +
+                        `<span style="color:#ff6b6b;">${c.low || 0} low</span></span>` +
                         `<span class="ms-2">${timeStr}</span></div>`;
                 }).join('');
                 log.scrollTop = 0;
@@ -199,18 +275,9 @@ function listenProgress() {
     };
 
     source.onerror = function() {
-        // SSE connection lost — check if extraction is complete
+        // SSE connection lost (e.g. user navigated away and came back).
+        // Close silently — initProcessPage() will reconnect on next visit.
         source.close();
-        setTimeout(() => {
-            fetch('/patients')
-                .then(r => r.json())
-                .then(data => {
-                    if (data.patients && data.patients.length > 0) {
-                        // Extraction may be complete, redirect to review
-                        window.location.href = '/review';
-                    }
-                });
-        }, 2000);
     };
 }
 

@@ -379,7 +379,14 @@ def get_patient(patient_id):
     extractions = {}
     for group_name, fields in patient.extractions.items():
         extractions[group_name] = {
-            key: {"value": fr.value, "confidence": fr.confidence, "reason": fr.reason, "edited": fr.edited}
+            key: {
+                "value": fr.value,
+                "confidence": fr.confidence,
+                "reason": fr.reason,
+                "edited": fr.edited,
+                "source_cell": fr.source_cell,
+                "source_snippet": fr.source_snippet,
+            }
             for key, fr in fields.items()
         }
 
@@ -388,6 +395,7 @@ def get_patient(patient_id):
         "initials": patient.initials,
         "nhs_number": patient.nhs_number,
         "raw_text": patient.raw_text,
+        "raw_cells": patient.raw_cells,
         "extractions": extractions
     })
 
@@ -432,12 +440,24 @@ def re_extract(patient_id):
     target_groups = data.get('groups', [g['name'] for g in get_groups()])
 
     def _do_re_extract():
-        for group in get_groups():
+        groups = get_groups()
+        for group in groups:
             if group['name'] in target_groups:
                 try:
-                    prompt = build_prompt(patient.raw_text, group)
-                    raw_response = generate(prompt)
-                    results = parse_llm_response(raw_response, group)
+                    # Phase 1: regex
+                    results = regex_extract(patient.raw_text, group['name'], group['fields'], patient.raw_cells)
+                    # Phase 2: LLM for gaps in LLM groups
+                    if group.get('llm_required', False):
+                        gaps = sum(1 for fr in results.values() if fr.value is None)
+                        if gaps > 0:
+                            prompt = build_prompt(patient.raw_text, group)
+                            raw_response = generate(prompt)
+                            llm_results = parse_llm_response(raw_response, group)
+                            for key, llm_fr in llm_results.items():
+                                if results[key].value is None and llm_fr.value is not None:
+                                    _resolve_source_cell(patient, llm_fr)
+                                    llm_fr.reason = f"[LLM] {llm_fr.reason}"
+                                    results[key] = llm_fr
                     patient.extractions[group['name']] = results
                 except Exception:
                     pass
@@ -449,9 +469,19 @@ def re_extract(patient_id):
     return jsonify({"status": "started"})
 
 
+@app.route('/status')
+def status():
+    return jsonify({
+        "status": session.status,
+        "current": session.progress['current_patient'],
+        "total": session.progress['total'],
+        "phase": session.progress.get('phase', 'idle'),
+    })
+
+
 @app.route('/export')
 def export():
-    if session.status != 'complete' or not session.patients:
+    if session.status not in ('complete', 'stopped') or not session.patients:
         return jsonify({"error": "No data to export"}), 400
 
     output_path = os.path.join(app.config['UPLOAD_FOLDER'], 'export.xlsx')
@@ -641,6 +671,17 @@ def reset():
 
 
 # Helper functions
+def _resolve_source_cell(patient, fr):
+    """Search patient.raw_cells for fr.value and populate fr.source_cell/source_snippet."""
+    if not fr.value or not patient.raw_cells:
+        return
+    for cell in patient.raw_cells:
+        if fr.value in cell["text"]:
+            fr.source_cell = {"row": cell["row"], "col": cell["col"]}
+            fr.source_snippet = fr.value
+            return
+
+
 def _find_patient(patient_id: str):
     for p in session.patients:
         if p.id == patient_id:

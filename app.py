@@ -454,13 +454,14 @@ def re_extract(patient_id):
                             raw_response = generate(prompt)
                             llm_results = parse_llm_response(raw_response, group)
                             for key, llm_fr in llm_results.items():
-                                if results[key].value is None and llm_fr.value is not None:
+                                if key in results and results[key].value is None and llm_fr.value is not None:
                                     _resolve_source_cell(patient, llm_fr)
                                     llm_fr.reason = f"[LLM] {llm_fr.reason}"
                                     results[key] = llm_fr
                     patient.extractions[group['name']] = results
-                except Exception:
-                    pass
+                except Exception as e:
+                    log_event('re_extract_error', group=group['name'], error=str(e))
+                    pass  # LLM call failed — regex results preserved for non-llm_required groups
 
     thread = threading.Thread(target=_do_re_extract)
     thread.daemon = True
@@ -672,13 +673,19 @@ def reset():
 
 # Helper functions
 def _resolve_source_cell(patient, fr):
-    """Search patient.raw_cells for fr.value and populate fr.source_cell/source_snippet."""
+    """Search patient.raw_cells for a cell containing fr.value and populate
+    fr.source_cell/source_snippet.
+
+    Note: uses substring matching on the normalised value — this is a best-effort
+    approximation for LLM-extracted fields. For regex-extracted fields, source_cell
+    is already set precisely by regex_extractor.py.
+    """
     if not fr.value or not patient.raw_cells:
         return
     for cell in patient.raw_cells:
         if fr.value in cell["text"]:
             fr.source_cell = {"row": cell["row"], "col": cell["col"]}
-            fr.source_snippet = fr.value
+            fr.source_snippet = fr.value  # approximate — raw LLM token not available
             return
 
 

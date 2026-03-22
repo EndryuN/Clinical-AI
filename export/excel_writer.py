@@ -81,6 +81,24 @@ def write_excel(patients: list, output_path: str):
                     max_len = max(max_len, len(str(cell.value)))
         ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = min(max_len + 2, 30)
 
+    # Hidden Metadata sheet — stores confidence + reasoning for round-trip fidelity
+    ws_meta = wb.create_sheet("Metadata")
+    ws_meta.sheet_state = 'hidden'
+    ws_meta.append(["patient_id", "field_key", "confidence", "reason"])
+    for patient in patients:
+        # Use MRN as patient_id to match the identifier _import_excel reconstructs
+        demo = patient.extractions.get("Demographics", {})
+        mrn_fr = demo.get("mrn")
+        meta_pid = (mrn_fr.value if mrn_fr and mrn_fr.value else None) or patient.id
+        for group_name, fields in patient.extractions.items():
+            for field_key, fr in fields.items():
+                ws_meta.append([
+                    meta_pid,
+                    field_key,
+                    fr.confidence or 'none',
+                    fr.reason or ''
+                ])
+
     wb.save(output_path)
 
 

@@ -123,6 +123,19 @@ def _import_excel(file_path: str) -> list:
         col_to_field[field['excel_column']] = (field['group_name'], field['key'], field['type'])
 
     wb = load_workbook(file_path)
+
+    # Load Metadata sheet if present (written by new exporter)
+    meta_lookup = {}
+    if "Metadata" in wb.sheetnames:
+        ws_meta = wb["Metadata"]
+        for row in ws_meta.iter_rows(min_row=2, values_only=True):
+            pid, fkey, conf, reason = row
+            if pid and fkey:
+                meta_lookup[(str(pid), str(fkey))] = {
+                    "confidence": conf or 'high',
+                    "reason": reason or ''
+                }
+
     ws = wb.active
 
     patients = []
@@ -133,6 +146,11 @@ def _import_excel(file_path: str) -> list:
         if not mrn_val and not nhs_val:
             continue
 
+        # Determine patient_id early (needed for meta_lookup)
+        mrn_col = next((f['excel_column'] for f in all_fields if f['key'] == 'mrn'), None)
+        mrn_cell_val = ws.cell(row=row_idx, column=mrn_col).value if mrn_col else None
+        patient_id = str(mrn_cell_val).strip() if mrn_cell_val else f"patient_{row_idx - 1:03d}"
+
         # Build extractions from Excel data
         extractions = {}
         for group in groups:
@@ -142,7 +160,12 @@ def _import_excel(file_path: str) -> list:
                 cell_value = ws.cell(row=row_idx, column=col).value
                 if cell_value is not None:
                     value = str(cell_value).strip()
-                    group_fields[field['key']] = FieldResult(value=value, confidence='high')
+                    meta = meta_lookup.get((patient_id, field['key']), {})
+                    group_fields[field['key']] = FieldResult(
+                        value=value,
+                        confidence=meta.get('confidence', 'high'),
+                        reason=meta.get('reason', '')
+                    )
                 else:
                     group_fields[field['key']] = FieldResult(value=None, confidence='none')
             extractions[group['name']] = group_fields
@@ -150,7 +173,6 @@ def _import_excel(file_path: str) -> list:
         # Get patient identifiers from Demographics fields
         initials = ""
         nhs_number = ""
-        patient_id = f"patient_{row_idx - 1:03d}"
 
         demo = extractions.get("Demographics", {})
         if "initials" in demo and demo["initials"].value:

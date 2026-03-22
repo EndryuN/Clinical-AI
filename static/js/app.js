@@ -201,9 +201,10 @@ function listenProgress() {
         // Regex bar: regex_complete / total
         const regexPct = total > 0 ? ((data.regex_complete || 0) / total * 100).toFixed(0) : 0;
 
-        // LLM bar: llm_complete / llm_queue_size
+        // LLM bar: patients fully done / total patients
         const llmTotal = data.llm_queue_size || 0;
-        const llmPct = llmTotal > 0 ? ((data.llm_complete || 0) / llmTotal * 100).toFixed(0) : 0;
+        const llmDonePatients = (data.completed_patients || []).length;
+        const llmPct = total > 0 ? (llmDonePatients / total * 100).toFixed(0) : 0;
 
         const regexBar = document.getElementById('progress-bar-regex');
         const llmBar = document.getElementById('progress-bar-llm');
@@ -242,10 +243,11 @@ function listenProgress() {
             }
         }
 
-        // LLM label: groups processed
+        // LLM label: patients fully completed
         if (phaseDetail) {
             if (phase === 'llm') {
-                phaseDetail.textContent = `${data.llm_complete || 0} / ${llmTotal} groups`;
+                const done = (data.completed_patients || []).length;
+                phaseDetail.textContent = `${done} / ${total} patients`;
             } else {
                 phaseDetail.textContent = '';
             }
@@ -257,7 +259,8 @@ function listenProgress() {
 
         // Render active patients — improved card styling
         if (activePatientsList) {
-            const active = Object.entries(data.active_patients || {});
+            // Only show tasks that are actually running (not queued waiting for semaphore)
+            const active = Object.entries(data.active_patients || {}).filter(([, p]) => p.status !== 'queued');
             if (active.length === 0) {
                 activePatientsList.innerHTML = '<span class="text-muted small">Waiting...</span>';
             } else {

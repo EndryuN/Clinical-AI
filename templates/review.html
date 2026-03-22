@@ -21,15 +21,15 @@
     </div>
 
     <!-- Main Content -->
-    <div class="col-md-10 d-flex flex-column">
+    <div class="col-md-10 d-flex flex-column" style="min-width:0;">
         <!-- Group Tabs + Confidence Filter -->
-        <div class="d-flex align-items-center border-bottom border-secondary">
-            <ul class="nav nav-tabs flex-grow-1 border-0" id="group-tabs">
+        <div class="d-flex align-items-center border-bottom border-secondary flex-shrink-0">
+            <ul class="nav nav-tabs flex-grow-1 border-0" id="group-tabs" style="flex-wrap:nowrap; overflow-x:auto;">
                 <li class="nav-item">
                     <span class="nav-link text-muted">Select a patient to view data</span>
                 </li>
             </ul>
-            <div class="px-3">
+            <div class="px-3 flex-shrink-0">
                 <select class="form-select form-select-sm bg-dark text-light" style="width:auto"
                         onchange="filterConfidence(this.value)">
                     <option value="">All Confidence</option>
@@ -41,31 +41,36 @@
             </div>
         </div>
 
-        <!-- Field Table -->
-        <div class="flex-grow-1 overflow-auto p-3">
-            <table class="table table-dark table-sm table-hover">
-                <thead>
-                    <tr>
-                        <th style="width:30%">Field</th>
-                        <th style="width:50%">Value</th>
-                        <th style="width:20%" class="text-center">Confidence</th>
-                    </tr>
-                </thead>
-                <tbody id="field-table-body">
-                    <tr><td colspan="3" class="text-muted text-center py-4">Select a patient from the sidebar</td></tr>
-                </tbody>
-            </table>
-        </div>
+        <!-- Field Table + Source Panel side by side -->
+        <div class="d-flex flex-grow-1" style="min-height:0;">
 
-        <!-- Source Text Panel -->
-        <div id="source-panel" class="border-top border-secondary p-3" style="min-height: 250px; resize: vertical; overflow-y: auto;">
-            <div class="text-muted small text-uppercase mb-1">Source Document</div>
-            <div id="source-warning" class="d-none alert alert-danger py-1 small mt-1 mb-2">
-                Value not found in source document — possible hallucination
+            <!-- Field Table -->
+            <div class="overflow-auto p-3" style="flex:0 0 50%; min-width:0;">
+                <table class="table table-dark table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th style="width:30%">Field</th>
+                            <th style="width:45%">Value</th>
+                            <th style="width:25%" class="text-center">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody id="field-table-body">
+                        <tr><td colspan="3" class="text-muted text-center py-4">Select a patient from the sidebar</td></tr>
+                    </tbody>
+                </table>
             </div>
-            <div id="source-table">
-                <span class="text-muted small">Select a patient to view source document</span>
+
+            <!-- Source Panel -->
+            <div id="source-panel" class="border-start border-secondary overflow-auto p-3" style="flex:1; min-width:0;">
+                <div class="text-muted small text-uppercase mb-1">Source Document</div>
+                <div id="source-warning" class="d-none alert alert-danger py-1 small mt-1 mb-2">
+                    Value not found in source document — possible hallucination
+                </div>
+                <div id="source-table">
+                    <span class="text-muted small">Select a patient to view source document</span>
+                </div>
             </div>
+
         </div>
     </div>
 </div>

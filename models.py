@@ -1,5 +1,12 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, TypedDict
+
+
+class CellRef(TypedDict):
+    row: int
+    col: int
+    text: str
+
 
 @dataclass
 class FieldResult:
@@ -18,8 +25,7 @@ class PatientBlock:
     nhs_number: str = ""
     raw_text: str = ""
     extractions: dict = field(default_factory=dict)
-    raw_cells: list = field(default_factory=list)
-    # [{"row": int, "col": int, "text": str}, ...] — all cells, including empty
+    raw_cells: list[CellRef] = field(default_factory=list)
 
 @dataclass
 class ExtractionSession:

@@ -27,7 +27,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 from docx import Document  # type: ignore
-from models import PatientBlock
+from models import PatientBlock, CellRef
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ def _table_to_text(table) -> str:
     return "\n\n".join(parts)
 
 
-def _table_to_cells(table) -> list[dict]:
+def _table_to_cells(table) -> list[CellRef]:
     """Return all cells in the table as a flat list with stable row/col coordinates.
 
     Empty cells are included so row/col indices are stable for source highlighting.

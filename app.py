@@ -100,7 +100,7 @@ def upload():
             # log_event is already used throughout app.py with signature (event_name, **kwargs)
             try:
                 ts = safe_name.split('_')[0]
-                preview_dir = os.path.join('static', 'previews', ts)
+                preview_dir = os.path.join(app.static_folder, 'previews', ts)
                 os.makedirs(preview_dir, exist_ok=True)
                 for p in patients:
                     render_patient_preview(p, preview_dir)
@@ -264,6 +264,7 @@ def _run_extraction(patient_limit=None, concurrency=1):
     session.progress['llm_queue_size'] = 0
     session.progress['current_patient'] = 0
     session.progress['patient_times'] = []
+    session.progress['average_seconds'] = 0
     session.progress['active_patients'] = {}
     session.progress['completed_patients'] = []
     session.progress['start_time'] = time.time()
@@ -494,13 +495,13 @@ def patient_preview(patient_id):
     if not session.file_name:
         return jsonify({"error": "no file"}), 404
     ts = session.file_name.split('_')[0]
-    json_path = os.path.join('static', 'previews', ts, f'{patient_id}.json')
+    json_path = os.path.join(app.static_folder, 'previews', ts, f'{patient.id}.json')
     if not os.path.exists(json_path):
         return jsonify({"error": "preview not available"}), 404
     with open(json_path) as f:
         coords = json.load(f)
     return jsonify({
-        "image_url": f"/static/previews/{ts}/{patient_id}.png",
+        "image_url": f"/static/previews/{ts}/{patient.id}.png",
         "coords": coords,
     })
 

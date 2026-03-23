@@ -81,6 +81,19 @@ function showUploadError(msg) {
 
 // ===== Process Page =====
 function initProcessPage() {
+    // Show current model
+    fetch('/backend')
+        .then(r => r.json())
+        .then(b => {
+            const el = document.getElementById('current-model');
+            if (el) {
+                el.textContent = b.backend === 'claude'
+                    ? 'Claude API'
+                    : `${b.ollama_model} (Ollama)`;
+            }
+        })
+        .catch(() => {});
+
     // If extraction is already running (user navigated back), resume live view
     fetch('/status')
         .then(r => r.json())
@@ -685,30 +698,52 @@ function editField(group, field, newValue) {
 }
 
 // ===== Live Review During Extraction =====
+let _reviewPollTimer = null;
+
+function _attachProgressSSE() {
+    const source = new EventSource('/progress');
+    source.onmessage = function(event) {
+        const d = JSON.parse(event.data);
+        if (d.status === 'complete' || d.status === 'stopped') {
+            source.close();
+            loadPatients();
+        }
+    };
+    source.onerror = function() {
+        source.close();
+        fetch('/status').then(r => r.json()).then(d => {
+            if (d.status === 'complete' || d.status === 'stopped') loadPatients();
+        }).catch(() => {});
+    };
+    window.addEventListener('beforeunload', () => source.close());
+}
+
+function _pollUntilExtracting() {
+    // Status is 'parsed' — extraction hasn't started yet. Poll until it does.
+    _reviewPollTimer = setInterval(() => {
+        fetch('/status').then(r => r.json()).then(d => {
+            if (d.status === 'extracting') {
+                clearInterval(_reviewPollTimer);
+                _attachProgressSSE();
+            } else if (d.status === 'complete' || d.status === 'stopped') {
+                clearInterval(_reviewPollTimer);
+                loadPatients();
+            }
+        }).catch(() => {});
+    }, 3000);
+    window.addEventListener('beforeunload', () => clearInterval(_reviewPollTimer));
+}
+
 function initLiveReview() {
     fetch('/status')
         .then(r => r.json())
         .then(data => {
-            if (data.status !== 'extracting') return;
-            const source = new EventSource('/progress');
-
-            source.onmessage = function(event) {
-                const d = JSON.parse(event.data);
-                if (d.status === 'complete' || d.status === 'stopped') {
-                    source.close();
-                    loadPatients();
-                }
-            };
-
-            source.onerror = function() {
-                source.close();
-                // Poll /status in case SSE dropped mid-extraction — load patients if done
-                fetch('/status').then(r => r.json()).then(d => {
-                    if (d.status === 'complete' || d.status === 'stopped') loadPatients();
-                }).catch(() => {});
-            };
-
-            window.addEventListener('beforeunload', () => source.close());
+            if (data.status === 'extracting') {
+                _attachProgressSSE();
+            } else if (data.status === 'parsed') {
+                _pollUntilExtracting();
+            }
+            // 'complete'/'stopped'/'idle': DOMContentLoaded handler already loaded patients
         })
         .catch(() => {});
 }

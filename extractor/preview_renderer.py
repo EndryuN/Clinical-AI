@@ -34,12 +34,8 @@ _TEXT_COLOUR = (26, 26, 26)
 
 
 def _font(size: int = 11) -> ImageFont.FreeTypeFont:
-    """Return a PIL font at the requested size. Falls back gracefully."""
-    try:
-        return ImageFont.load_default(size=size)
-    except TypeError:
-        # Pillow < 10: load_default() takes no size argument
-        return ImageFont.load_default()
+    """Return a PIL FreeType font at the requested size. Requires Pillow >= 10."""
+    return ImageFont.load_default(size=size)
 
 
 def _wrap(text: str, font, max_px: int, draw: ImageDraw.ImageDraw) -> list[str]:
@@ -61,6 +57,11 @@ def _wrap(text: str, font, max_px: int, draw: ImageDraw.ImageDraw) -> list[str]:
         else:
             if current:
                 lines.append(current)
+            # If the word itself exceeds max_px, hard-truncate with ellipsis
+            if draw.textlength(word, font=font) > max_px:
+                while word and draw.textlength(word + '…', font=font) > max_px:
+                    word = word[:-1]
+                word = word + '…'
             current = word
     if current:
         lines.append(current)
@@ -116,12 +117,14 @@ def render_patient_preview(patient: PatientBlock, out_dir: str) -> dict:
                 font = font_bold if is_header else font_normal
                 max_w = col_w - CELL_PADDING * 2
                 lines = _wrap(text, font, max_w, draw)
-                # Cap at 4 lines; ellipsize last if truncated
-                if len(lines) > 4:
-                    lines = lines[:4]
+                # Cap lines: header rows (36px) fit 1 line; content rows fit 4
+                max_lines = 1 if is_header else 4
+                if len(lines) > max_lines:
+                    lines = lines[:max_lines]
                     lines[-1] = lines[-1][:-1] + '…' if lines[-1] else '…'
                 ty = y + CELL_PADDING
-                line_h = draw.textbbox((0, 0), 'Ag', font=font)[3] + 2
+                bb = draw.textbbox((0, 0), 'Ag', font=font)
+                line_h = (bb[3] - bb[1]) + 2
                 for line in lines:
                     draw.text((x + CELL_PADDING, ty), line, font=font, fill=_TEXT_COLOUR)
                     ty += line_h

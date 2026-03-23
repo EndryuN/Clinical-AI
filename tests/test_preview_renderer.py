@@ -1,6 +1,5 @@
 # tests/test_preview_renderer.py
 import json
-import pytest
 from PIL import Image
 
 from extractor.preview_renderer import render_patient_preview

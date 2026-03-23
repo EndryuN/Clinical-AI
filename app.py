@@ -404,8 +404,15 @@ def get_patients():
     cancer_type = request.args.get('cancer_type', '')
     search = request.args.get('search', '').lower()
 
+    # During extraction only expose patients whose LLM is done
+    if session.status == 'extracting':
+        completed_ids = {p['id'] for p in session.progress.get('completed_patients', [])}
+        source = [p for p in session.patients if p.id in completed_ids]
+    else:
+        source = session.patients
+
     result = []
-    for p in session.patients:
+    for p in source:
         ct = _get_cancer_type(p)
 
         if cancer_type and ct != cancer_type:

@@ -243,8 +243,6 @@ def stop_extraction():
 
 
 def _run_extraction(patient_limit=None, concurrency=1):
-    # concurrency is retained for API compatibility but not used —
-    # Phase 1 uses max(1, min(N, 16)) and Phase 2 uses max_workers=2 (semaphore-controlled)
     import time
     from concurrent.futures import ThreadPoolExecutor
 
@@ -258,10 +256,10 @@ def _run_extraction(patient_limit=None, concurrency=1):
         return
 
     session.progress['total'] = len(patients_to_process)
-    session.progress['phase'] = 'regex'
+    session.progress['phase'] = 'llm'
     session.progress['regex_complete'] = 0
     session.progress['llm_complete'] = 0
-    session.progress['llm_queue_size'] = 0
+    session.progress['llm_queue_size'] = len(patients_to_process)
     session.progress['current_patient'] = 0
     session.progress['patient_times'] = []
     session.progress['average_seconds'] = 0
@@ -270,126 +268,95 @@ def _run_extraction(patient_limit=None, concurrency=1):
     session.progress['start_time'] = time.time()
 
     _counter_lock = threading.Lock()
+    llm_semaphore = threading.Semaphore(1)
 
-    # ------------------------------------------------------------------ #
-    # Phase 1 — Regex sweep (fully parallel across all patients)          #
-    # ------------------------------------------------------------------ #
-    def regex_phase(patient):
+    def process_patient(patient):
         if session.stop_requested:
             return
-        session.progress['active_patients'][patient.id] = {
-            "initials": patient.initials, "group": "Regex", "start": time.time()
-        }
+
+        # --- Regex (inline, fast) ---
         for group in groups:
             results = regex_extract(patient.raw_text, group['name'], group['fields'], patient.raw_cells)
-            # Pre-populate LLM groups with none-stubs for complete dict structure
             if group.get('llm_required', False):
                 for key, fr in results.items():
                     if fr.value is None:
                         results[key] = FieldResult(value=None, confidence='none')
             patient.extractions[group['name']] = results
-        del session.progress['active_patients'][patient.id]
         with _counter_lock:
             session.progress['regex_complete'] += 1
 
-    with ThreadPoolExecutor(max_workers=min(len(patients_to_process), 16)) as ex:
-        list(ex.map(regex_phase, patients_to_process))
-
-    if session.stop_requested:
-        session.status = 'stopped'
-        return
-
-    # ------------------------------------------------------------------ #
-    # Phase 2 — LLM queue (semaphore-controlled, Ollama is serial)        #
-    # ------------------------------------------------------------------ #
-    session.progress['phase'] = 'llm'
-    llm_semaphore = threading.Semaphore(1)
-
-    llm_tasks = [
-        (patient, group)
-        for patient in patients_to_process
-        for group in llm_groups
-        if any(fr.value is None for fr in patient.extractions.get(group['name'], {}).values())
-    ]
-    session.progress['llm_queue_size'] = len(llm_tasks)
-
-    # Build per-patient actual task counts from llm_tasks
-    _patient_task_counts = {}
-    for p, g in llm_tasks:
-        _patient_task_counts[p.id] = _patient_task_counts.get(p.id, 0) + 1
-
-    # Handle patients that generated zero LLM tasks — mark them complete immediately
-    for p in patients_to_process:
-        if p.id not in _patient_task_counts:
-            conf = _confidence_summary(p)
-            session.progress['completed_patients'].append({
-                "id": p.id,
-                "initials": p.initials,
-                "confidence_summary": conf,
-                "seconds": 0,
-            })
-
-    # Track per-patient group completion to avoid premature "done" signals.
-    # Use a counter dict: {patient_id: number_of_llm_tasks_completed}
-    _patient_group_counts = {p.id: 0 for p in patients_to_process}
-    _patient_start_times = {}
-
-    def llm_phase(task):
-        patient, group = task
         if session.stop_requested:
             return
-        task_key = f"{patient.id}:{group['name']}"
-        session.progress['active_patients'][task_key] = {
-            "initials": patient.initials, "group": group['name'], "start": time.time(),
-            "status": "queued",
-            "has_context": bool(get_context_for_group(group['name'])),
-        }
-        with llm_semaphore:
-            # Re-check after acquiring the semaphore: a waiting thread may have been
-            # queued before stop was requested, so skip its LLM call now.
-            if session.stop_requested:
-                del session.progress['active_patients'][task_key]
-                return
-            session.progress['active_patients'][task_key]['status'] = 'running'
+
+        # --- LLM (serial via semaphore, groups run sequentially per patient) ---
+        patient_llm_groups = [
+            g for g in llm_groups
+            if any(fr.value is None for fr in patient.extractions.get(g['name'], {}).values())
+        ]
+
+        if not patient_llm_groups:
+            conf = _confidence_summary(patient)
             with _counter_lock:
-                if patient.id not in _patient_start_times:
-                    _patient_start_times[patient.id] = time.time()
-            try:
-                system_prompt, user_prompt = build_prompt(patient.raw_text, group)
-                raw_response = generate(user_prompt, system_prompt)
-                llm_results = parse_llm_response(raw_response, group)
-                for key, llm_fr in llm_results.items():
-                    current = patient.extractions[group['name']].get(key)
-                    if current and current.value is None and llm_fr.value is not None:
-                        _resolve_source_cell(patient, llm_fr)
-                        llm_fr.reason = f"[LLM] {llm_fr.reason}"
-                        patient.extractions[group['name']][key] = llm_fr
-            except Exception as e:
-                log_event('llm_extraction_error', patient_id=patient.id, group=group['name'], error=str(e))
-        del session.progress['active_patients'][task_key]
+                session.progress['llm_complete'] += 1
+                session.progress['current_patient'] = session.progress['llm_complete']
+                session.progress['completed_patients'].append({
+                    "id": patient.id, "initials": patient.initials,
+                    "confidence_summary": conf, "seconds": 0,
+                })
+            return
+
+        start_time = time.time()
+        session.progress['active_patients'][patient.id] = {
+            "initials": patient.initials,
+            "group": patient_llm_groups[0]['name'],
+            "start": start_time,
+            "status": "queued",
+            "has_context": bool(get_context_for_group(patient_llm_groups[0]['name'])),
+        }
+
+        for group in patient_llm_groups:
+            if session.stop_requested:
+                break
+            session.progress['active_patients'][patient.id].update({
+                'group': group['name'],
+                'has_context': bool(get_context_for_group(group['name'])),
+                'status': 'queued',
+            })
+            with llm_semaphore:
+                if session.stop_requested:
+                    break
+                session.progress['active_patients'][patient.id]['status'] = 'running'
+                try:
+                    system_prompt, user_prompt = build_prompt(patient.raw_text, group)
+                    raw_response = generate(user_prompt, system_prompt)
+                    llm_results = parse_llm_response(raw_response, group)
+                    for key, llm_fr in llm_results.items():
+                        current = patient.extractions[group['name']].get(key)
+                        if current and current.value is None and llm_fr.value is not None:
+                            _resolve_source_cell(patient, llm_fr)
+                            llm_fr.reason = f"[LLM] {llm_fr.reason}"
+                            patient.extractions[group['name']][key] = llm_fr
+                except Exception as e:
+                    log_event('llm_extraction_error', patient_id=patient.id, group=group['name'], error=str(e))
+
+        session.progress['active_patients'].pop(patient.id, None)
+
+        elapsed = round(time.time() - start_time, 1)
+        conf = _confidence_summary(patient)
         with _counter_lock:
             session.progress['llm_complete'] += 1
             session.progress['current_patient'] = session.progress['llm_complete']
-            _patient_group_counts[patient.id] += 1
-            # Patient is fully done only when ALL its actual LLM tasks have completed
-            if _patient_group_counts[patient.id] == _patient_task_counts.get(patient.id, 0):
-                conf = _confidence_summary(patient)
-                # start time always set before this point (semaphore acquired first); fallback avoids KeyError only
-                elapsed = round(time.time() - _patient_start_times.get(patient.id, time.time()), 1)
-                session.progress['patient_times'].append(elapsed)
-                session.progress['average_seconds'] = round(
-                    sum(session.progress['patient_times']) / len(session.progress['patient_times']), 1
-                )
-                session.progress['completed_patients'].append({
-                    "id": patient.id,
-                    "initials": patient.initials,
-                    "confidence_summary": conf,
-                    "seconds": elapsed,
-                })
+            session.progress['patient_times'].append(elapsed)
+            session.progress['average_seconds'] = round(
+                sum(session.progress['patient_times']) / len(session.progress['patient_times']), 1
+            )
+            session.progress['completed_patients'].append({
+                "id": patient.id, "initials": patient.initials,
+                "confidence_summary": conf, "seconds": elapsed,
+            })
 
-    # max_workers=2: one runs (semaphore), one queues ready. Prevents gap between tasks.
-    with ThreadPoolExecutor(max_workers=2) as ex:
-        list(ex.map(llm_phase, llm_tasks))
+    with ThreadPoolExecutor(max_workers=max(1, min(concurrency, 3))) as ex:
+        list(ex.map(process_patient, patients_to_process))
 
     session.status = 'complete' if not session.stop_requested else 'stopped'
     session.progress['phase'] = 'complete'

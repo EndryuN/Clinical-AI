@@ -54,6 +54,7 @@ def parse_llm_response(raw_response: str, group: dict) -> dict[str, FieldResult]
             value = data[key].get('value')
             confidence = data[key].get('confidence', 'low')
             reason = data[key].get('reason', '')
+            source_section = data[key].get('source_section') if key in data and isinstance(data[key], dict) else None
             confidence = confidence.lower() if isinstance(confidence, str) else 'low'
             if confidence not in ('high', 'medium', 'low'):
                 confidence = 'low'
@@ -63,6 +64,7 @@ def parse_llm_response(raw_response: str, group: dict) -> dict[str, FieldResult]
         else:
             value = None
             confidence = 'low'
+            source_section = None
 
         if value is not None:
             value = str(value).strip()
@@ -83,7 +85,7 @@ def parse_llm_response(raw_response: str, group: dict) -> dict[str, FieldResult]
             if typos:
                 reason = f"[Possible misspelling: {', '.join(typos[:3])}] {reason}"
 
-        results[key] = FieldResult(value=value, confidence=confidence, reason=reason)
+        results[key] = FieldResult(value=value, confidence=confidence, reason=reason, source_snippet=source_section)
 
     return results
 

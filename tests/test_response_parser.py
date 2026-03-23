@@ -36,3 +36,25 @@ def test_null_value_gets_none_confidence():
     results = parse_llm_response(raw, group)
     assert results['endoscopy_findings'].confidence == 'none'
     assert results['endoscopy_findings'].value is None
+
+def test_source_section_stored_in_source_snippet():
+    group = {'fields': [{'key': 'mmr_status', 'type': 'string'}]}
+    raw = json.dumps({
+        'mmr_status': {
+            'value': 'Proficient',
+            'confidence': 'medium',
+            'reason': 'stated in text',
+            'source_section': '(g)'
+        }
+    })
+    results = parse_llm_response(raw, group)
+    assert results['mmr_status'].source_snippet == '(g)'
+
+
+def test_missing_source_section_gives_none():
+    group = {'fields': [{'key': 'dob', 'type': 'date'}]}
+    raw = json.dumps({
+        'dob': {'value': '01/01/1970', 'confidence': 'medium', 'reason': 'stated'}
+    })
+    results = parse_llm_response(raw, group)
+    assert results['dob'].source_snippet is None

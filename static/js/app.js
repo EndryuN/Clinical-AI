@@ -664,8 +664,18 @@ let _reviewPollTimer = null;
 
 function _attachProgressSSE() {
     const source = new EventSource('/progress');
+    let lastCompleted = 0;
+
     source.onmessage = function(event) {
         const d = JSON.parse(event.data);
+
+        // Trickle patients in as each one finishes LLM
+        const nowCompleted = (d.completed_patients || []).length;
+        if (nowCompleted > lastCompleted) {
+            lastCompleted = nowCompleted;
+            loadPatients();
+        }
+
         if (d.status === 'complete' || d.status === 'stopped') {
             source.close();
             loadPatients();
@@ -701,6 +711,7 @@ function initLiveReview() {
         .then(r => r.json())
         .then(data => {
             if (data.status === 'extracting') {
+                loadPatients(); // Show any patients already completed before page opened
                 _attachProgressSSE();
             } else if (data.status === 'parsed') {
                 _pollUntilExtracting();

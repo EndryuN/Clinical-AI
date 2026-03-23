@@ -273,9 +273,12 @@ function listenProgress() {
                     const accentColor = isRegex ? '#198754' : isQueued ? '#4b5563' : '#0d6efd';
                     const timerColor = isQueued ? '#6b7280' : '#f59e0b';
                     const groupLabel = isQueued ? `⏳ ${p.group}` : p.group || 'Starting...';
+                    const contextBadge = (!isQueued && p.has_context)
+                        ? `<span style="font-size:9px; background:#1e3a5f; color:#60a5fa; border:1px solid #2563eb; border-radius:3px; padding:1px 4px; margin-left:5px; vertical-align:middle;">G049</span>`
+                        : '';
                     return `<div style="background:#111827; border:1px solid ${accentColor}; border-radius:6px; padding:8px 12px; min-width:155px; opacity:${isQueued ? '0.6' : '1'};">` +
                            `<div style="font-size:12px; font-weight:700; color:#f0f0f0; letter-spacing:0.5px;">${p.initials || 'Patient'}</div>` +
-                           `<div style="font-size:10px; color:#9ca3af; margin-top:2px;">${groupLabel}</div>` +
+                           `<div style="font-size:10px; color:#9ca3af; margin-top:2px;">${groupLabel}${contextBadge}</div>` +
                            `<div style="font-size:14px; font-weight:700; color:${timerColor}; font-family:monospace; margin-top:4px;">${mins}:${secs}</div>` +
                            `</div>`;
                 }).join('');
@@ -324,6 +327,15 @@ fetch('/schema').then(r => r.json()).then(groups => {
 }).catch(() => {});
 let confidenceFilter = '';
 let allPatientExtractions = {};
+
+// Maps LLM source_snippet annotation markers to MDT table row indices
+const MARKER_TO_ROWS = {
+    '(a)': [1], '(b)': [1], '(c)': [1], '(d)': [1], '(e)': [1],
+    '(f)': [4, 5],
+    '(g)': [2, 3],
+    '(h)': [6, 7],
+    '(i)': [0],
+};
 
 function loadPatients(filters) {
     filters = filters || {};
@@ -387,10 +399,32 @@ function selectPatient(patientId) {
     fetch(`/patients/${patientId}`)
         .then(r => r.json())
         .then(data => {
-            // Update source document panel and preview
-            renderSourceTable(data.raw_cells || []);
-            renderDocPreview(data.raw_cells || []);
-            window._currentRawCells = data.raw_cells || [];
+            // Load rendered preview image and coord map
+            window._previewCoords = null;
+            const previewImg = document.getElementById('preview-img');
+            const previewPlaceholder = document.getElementById('preview-placeholder');
+            fetch(`/patient/${patientId}/preview`)
+                .then(r => r.json())
+                .then(preview => {
+                    if (preview.image_url && previewImg) {
+                        window._previewCoords = preview.coords;
+                        previewImg.onload = function() {
+                            const canvas = document.getElementById('preview-canvas');
+                            if (canvas) {
+                                canvas.width = previewImg.clientWidth;
+                                canvas.height = previewImg.clientHeight;
+                            }
+                        };
+                        previewImg.onerror = function() {
+                            previewImg.style.display = 'none';
+                            if (previewPlaceholder) previewPlaceholder.style.display = '';
+                        };
+                        previewImg.src = preview.image_url;
+                        previewImg.style.display = 'block';
+                        if (previewPlaceholder) previewPlaceholder.style.display = 'none';
+                    }
+                })
+                .catch(() => {});
 
             // Store extractions for re-rendering on filter change
             allPatientExtractions = data.extractions || {};
@@ -426,139 +460,54 @@ function selectPatient(patientId) {
         .catch(err => console.error('Failed to load patient:', err));
 }
 
-function renderSourceTable(rawCells) {
-    const container = document.getElementById('source-table');
-    if (!container) return;
-    if (!rawCells || rawCells.length === 0) {
-        container.innerHTML = '<span class="text-muted small">No source document available (imported from Excel)</span>';
-        return;
-    }
-
-    const rowMap = {};
-    rawCells.forEach(cell => {
-        if (!rowMap[cell.row]) rowMap[cell.row] = {};
-        rowMap[cell.row][cell.col] = cell.text;
-    });
-
-    const numCols = Math.max(...rawCells.map(c => c.col)) + 1;
-    const headerRows = new Set([0, 2, 4, 6]);
-
-    // Single-column document view — each row is a header block or content block.
-    // data-row / data-col preserved on each div so highlightSource() can target them.
-    let html = '<div style="font-size:11px;">';
-    Object.keys(rowMap).sort((a, b) => +a - +b).forEach(rowIdx => {
-        const isHeader = headerRows.has(+rowIdx);
-        const cols = rowMap[rowIdx];
-        if (isHeader) {
-            const text = (cols[0] || cols[1] || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-            const firstCol = cols[0] ? 0 : 1;
-            html += `<div data-row="${rowIdx}" data-col="${firstCol}" ` +
-                    `style="background:#21262d; color:#58a6ff; padding:5px 8px; font-weight:700; ` +
-                    `margin-top:6px; border-left:3px solid #4580f7; cursor:default;">${text}</div>`;
-        } else {
-            const seenTexts = new Set();
-            for (let c = 0; c < numCols; c++) {
-                const text = (cols[c] || '').trim();
-                if (!text || seenTexts.has(text)) continue;
-                seenTexts.add(text);
-                const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                html += `<div data-row="${rowIdx}" data-col="${c}" ` +
-                        `style="color:#8b949e; padding:3px 8px 3px 14px; font-family:monospace; ` +
-                        `white-space:pre-wrap; word-break:break-word; cursor:pointer;">${safe}</div>`;
-            }
-        }
-    });
-    html += '</div>';
-    container.innerHTML = html;
-}
-
-function renderDocPreview(rawCells) {
-    const container = document.getElementById('doc-preview');
-    if (!container) return;
-    if (!rawCells || rawCells.length === 0) {
-        container.innerHTML = '<span class="text-muted small">No document data</span>';
-        return;
-    }
-
-    const rowMap = {};
-    rawCells.forEach(cell => {
-        if (!rowMap[cell.row]) rowMap[cell.row] = {};
-        rowMap[cell.row][cell.col] = cell.text;
-    });
-
-    const numCols = Math.max(...rawCells.map(c => c.col)) + 1;
-    const headerRows = new Set([0, 2, 4, 6]);
-
-    let html = '<div style="background:#111827; border-radius:6px; padding:10px 14px; font-size:11px; line-height:1.6;">';
-    Object.keys(rowMap).sort((a, b) => +a - +b).forEach(rowIdx => {
-        const isHeader = headerRows.has(+rowIdx);
-        const cols = rowMap[rowIdx];
-        if (isHeader) {
-            const text = (cols[0] || cols[1] || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-            html += `<div style="color:#f0c060; font-weight:700; margin-top:10px; margin-bottom:3px; ` +
-                    `border-bottom:1px solid #2d333b; padding-bottom:2px;">${text}</div>`;
-        } else {
-            const parts = [];
-            for (let c = 0; c < numCols; c++) {
-                const t = (cols[c] || '').trim();
-                if (t) parts.push(t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
-            }
-            if (parts.length) {
-                html += `<div style="color:#c9d1d9;">${parts.join(' &nbsp;&middot;&nbsp; ')}</div>`;
-            }
-        }
-    });
-    html += '</div>';
-    container.innerHTML = html;
-}
-
 function highlightSource(fr) {
-    // Clear all previous highlights (now divs, not tds)
-    document.querySelectorAll('#source-table [data-row]').forEach(el => {
-        el.style.outline = '';
-        el.style.background = '';
-        if (el.querySelector('mark')) {
-            el.textContent = el.textContent;
-        }
-    });
+    const canvas = document.getElementById('preview-canvas');
+    const img = document.getElementById('preview-img');
     const warning = document.getElementById('source-warning');
+
     if (warning) warning.classList.add('d-none');
+    if (!canvas || !img || img.naturalWidth === 0) return;
+
+    // Sync canvas pixel dimensions to current rendered image size
+    canvas.width = img.clientWidth;
+    canvas.height = img.clientHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (!fr || fr.value === null || fr.value === undefined) return;
 
-    const conf = fr.confidence || 'none';
-    const colours = {
-        high:   { border: '#198754', mark: 'rgba(25,135,84,0.3)',  text: '#6ee7a0' },
-        medium: { border: '#f97316', mark: 'rgba(249,115,22,0.20)', text: '#fdba74' },
-        low:    { border: '#dc3545', mark: 'rgba(220,53,69,0.35)', text: '#ff6b6b' },
-    };
-    const colour = colours[conf];
+    const rows = MARKER_TO_ROWS[fr.source_snippet];
+    if (!rows || !window._previewCoords) {
+        if (fr.value !== null && fr.value !== '' && warning) warning.classList.remove('d-none');
+        return;
+    }
 
-    if (fr.source_cell && colour) {
-        const { row, col } = fr.source_cell;
-        const el = document.querySelector(`#source-table [data-row="${row}"][data-col="${col}"]`);
-        if (el) {
-            el.style.outline = `2px solid ${colour.border}`;
-            el.style.background = colour.mark;
-            if (fr.source_snippet) {
-                const fullText = el.textContent;
-                const idx = fullText.indexOf(fr.source_snippet);
-                if (idx !== -1) {
-                    el.textContent = '';
-                    const before = document.createTextNode(fullText.slice(0, idx));
-                    const mark = document.createElement('mark');
-                    mark.style.cssText = `background:${colour.mark}; color:${colour.text}; border-radius:2px; padding:0 2px;`;
-                    mark.textContent = fr.source_snippet;
-                    const after = document.createTextNode(fullText.slice(idx + fr.source_snippet.length));
-                    el.appendChild(before);
-                    el.appendChild(mark);
-                    el.appendChild(after);
-                }
-            }
-            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const scaleX = img.clientWidth / img.naturalWidth;
+    const scaleY = img.clientHeight / img.naturalHeight;
+
+    const conf = fr.confidence || 'low';
+    const colours = {
+        high:   { fill: 'rgba(25,135,84,0.25)',  stroke: '#198754' },
+        medium: { fill: 'rgba(249,115,22,0.20)',  stroke: '#f97316' },
+        low:    { fill: 'rgba(220,53,69,0.25)',   stroke: '#dc3545' },
+    };
+    const colour = colours[conf] || colours.low;
+
+    ctx.fillStyle = colour.fill;
+    ctx.strokeStyle = colour.stroke;
+    ctx.lineWidth = 2;
+
+    for (const row of rows) {
+        for (let col = 0; col < 3; col++) {
+            const cell = window._previewCoords[`${row},${col}`];
+            if (!cell) continue;
+            const x = cell.x * scaleX;
+            const y = cell.y * scaleY;
+            const w = cell.w * scaleX;
+            const h = cell.h * scaleY;
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeRect(x, y, w, h);
         }
-    } else if (fr.value !== null) {
-        if (warning) warning.classList.remove('d-none');
     }
 }
 
@@ -674,8 +623,15 @@ function renderFieldTable(fields, groupName) {
         const rowBg = isInferred ? 'background-color: rgba(249,115,22,0.05);' : '';
         const frData = JSON.stringify({value: fr.value, confidence: fr.confidence, source_cell: fr.source_cell || null, source_snippet: fr.source_snippet || null});
         const safeFrData = frData.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        const reasonRow = (safeReason && confText !== 'EMPTY' && confText !== 'N/A')
+            ? `<tr style="border-left: 4px solid ${groupColor}; border-top: none;">
+                <td colspan="3" style="padding: 2px 10px 6px 10px; padding-top:0;">
+                    <span style="font-size:11px; color:#6b7280; font-style:italic;">${safeReason}</span>
+                </td>
+               </tr>`
+            : '';
         return `
-        <tr class="${isPending ? 'pending-row' : ''}" style="border-left: 4px solid ${groupColor}; ${rowBg} cursor:pointer;"
+        <tr class="${isPending ? 'pending-row' : ''}" style="border-left: 4px solid ${groupColor}; ${rowBg} cursor:pointer; border-bottom: none;"
             data-fr="${safeFrData}" onclick="highlightSource(JSON.parse(this.dataset.fr))">
             <td class="small" style="color: ${hasValue ? '#c9d1d9' : '#555'};">${key}</td>
             <td>
@@ -685,12 +641,10 @@ function renderFieldTable(fields, groupName) {
                        onchange="editField('${groupName}', '${key}', this.value)">
             </td>
             <td class="text-center" style="min-width: 140px;">
-                <span class="badge bg-${confClass}" style="font-size:10px; cursor:help; ${confStyle}"
-                      title="${safeReason}">${confText}</span>
+                <span class="badge bg-${confClass}" style="font-size:10px; ${confStyle}">${confText}</span>
                 ${editedBadge}
-                ${safeReason && confText !== 'EMPTY' && confText !== 'N/A' ? '<div class="text-muted mt-1" style="font-size:9px; line-height:1.2;">' + safeReason + '</div>' : ''}
             </td>
-        </tr>`;
+        </tr>${reasonRow}`;
     }).join('');
 }
 
@@ -743,6 +697,10 @@ function initLiveReview() {
 
             source.onerror = function() {
                 source.close();
+                // Poll /status in case SSE dropped mid-extraction — load patients if done
+                fetch('/status').then(r => r.json()).then(d => {
+                    if (d.status === 'complete' || d.status === 'stopped') loadPatients();
+                }).catch(() => {});
             };
 
             window.addEventListener('beforeunload', () => source.close());

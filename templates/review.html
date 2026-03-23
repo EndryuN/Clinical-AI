@@ -48,44 +48,33 @@
         <!-- Field Table + Source Panel side by side -->
         <div class="d-flex flex-grow-1" style="min-height:0;">
 
-            <!-- Left: Field Table (top) + Document Preview (bottom) -->
-            <div class="d-flex flex-column" style="flex:0 0 50%; min-width:0; min-height:0;">
-
-                <!-- Field Table -->
-                <div class="overflow-auto p-3" style="flex:1 1 auto; min-height:0;">
-                    <table class="table table-dark table-sm table-hover">
-                        <thead>
-                            <tr>
-                                <th style="width:30%">Field</th>
-                                <th style="width:45%">Value</th>
-                                <th style="width:25%" class="text-center">Confidence</th>
-                            </tr>
-                        </thead>
-                        <tbody id="field-table-body">
-                            <tr><td colspan="3" class="text-muted text-center py-4">Select a patient from the sidebar</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Document Preview -->
-                <div class="border-top border-secondary flex-shrink-0 p-3" style="height:260px; overflow-y:auto; background:#0d1117;">
-                    <div class="text-muted small text-uppercase mb-2" style="font-size:10px; letter-spacing:0.5px;">Document Preview</div>
-                    <div id="doc-preview">
-                        <span class="text-muted small">Select a patient to view document</span>
-                    </div>
-                </div>
-
+            <!-- Left: Field Table (full height) -->
+            <div class="overflow-auto p-3" style="flex:0 0 50%; min-width:0; min-height:0;">
+                <table class="table table-dark table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th style="width:30%">Field</th>
+                            <th style="width:45%">Value</th>
+                            <th style="width:25%" class="text-center">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody id="field-table-body">
+                        <tr><td colspan="3" class="text-muted text-center py-4">Select a patient from the sidebar</td></tr>
+                    </tbody>
+                </table>
             </div>
 
-            <!-- Right: Source Panel (single-column, for highlighting) -->
+            <!-- Right: Patient Document Preview (image + canvas highlight overlay) -->
             <div id="source-panel" class="border-start border-secondary overflow-auto p-3" style="flex:1; min-width:0;">
-                <div class="text-muted small text-uppercase mb-1">Source Document</div>
+                <div class="text-muted small text-uppercase mb-1" style="font-size:10px; letter-spacing:0.5px;">Source Document</div>
                 <div id="source-warning" class="d-none alert alert-danger py-1 small mt-1 mb-2">
                     Value not found in source document — possible hallucination
                 </div>
-                <div id="source-table">
-                    <span class="text-muted small">Select a patient to view source document</span>
+                <div id="preview-container" style="position:relative; display:inline-block; width:100%;">
+                    <img id="preview-img" src="" alt="" style="display:none; width:100%; border:1px solid #333; border-radius:4px;">
+                    <canvas id="preview-canvas" style="position:absolute; top:0; left:0; pointer-events:none; width:100%; height:100%;"></canvas>
                 </div>
+                <span id="preview-placeholder" class="text-muted small">Select a patient to view source document</span>
             </div>
 
         </div>
@@ -94,6 +83,10 @@
 {% endblock %}
 {% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', () => loadPatients());
+    document.addEventListener('DOMContentLoaded', () => {
+        fetch('/status').then(r => r.json()).then(d => {
+            if (d.status === 'complete' || d.status === 'stopped' || d.status === 'idle' || d.status === 'parsed') loadPatients();
+        }).catch(() => loadPatients());
+    });
 </script>
 {% endblock %}

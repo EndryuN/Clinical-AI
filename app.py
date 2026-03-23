@@ -767,7 +767,7 @@ def _get_field_value(patient, group_name, field_key):
 def _get_cancer_type(patient):
     import re
     # 1. Extract from Diagnosis line (e.g., "Diagnosis: ADENOCARCINOMA, NOT OTHERWISE SPECIFIED")
-    m = re.search(r'Diagnosis:\s*([A-Z][A-Z\s\-]+)', patient.raw_text)
+    m = re.search(r'Diagnosis:\s*([A-Za-z][A-Za-z\s\-]+?)(?:\s*[,()\n]|$)', patient.raw_text)
     if m:
         diag = m.group(1).strip()
         if not diag.upper().startswith('ICD'):

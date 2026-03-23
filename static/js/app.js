@@ -282,7 +282,7 @@ function listenProgress() {
             }
         }
 
-        // Render completed patients log — medium in red to match badge colour
+        // Render completed patients log
         if (data.completed_patients && data.completed_patients.length > 0) {
             const log = document.getElementById('completed-log');
             if (log) {
@@ -292,7 +292,7 @@ function listenProgress() {
                     return `<div class="text-muted py-1 d-flex justify-content-between">` +
                         `<span>&#x2713; ${p.initials || p.id} &middot; ` +
                         `<span class="text-success">${c.high || 0} high</span> &middot; ` +
-                        `<span class="text-danger">${c.medium || 0} med</span> &middot; ` +
+                        `<span style="color:#f97316;">${c.medium || 0} med</span> &middot; ` +
                         `<span style="color:#ff6b6b;">${c.low || 0} low</span></span>` +
                         `<span class="ms-2">${timeStr}</span></div>`;
                 }).join('');
@@ -374,7 +374,7 @@ function renderPatientList(patients) {
             <div class="text-muted" style="font-size:11px">${p.nhs_number || ''} &middot; ${p.cancer_type || ''}</div>
             <div class="mt-1">
                 <span class="badge bg-success" style="font-size:10px">${c.high || 0} high</span>
-                <span class="badge bg-danger" style="font-size:10px">${c.medium || 0} med</span>
+                <span class="badge" style="font-size:10px;background:#f97316;">${c.medium || 0} med</span>
                 <span class="badge bg-danger" style="font-size:10px">${c.low || 0} low</span>
             </div>
         </div>`;
@@ -456,9 +456,11 @@ function renderSourceTable(rawCells) {
                     `style="background:#21262d; color:#58a6ff; padding:5px 8px; font-weight:700; ` +
                     `margin-top:6px; border-left:3px solid #4580f7; cursor:default;">${text}</div>`;
         } else {
+            const seenTexts = new Set();
             for (let c = 0; c < numCols; c++) {
                 const text = (cols[c] || '').trim();
-                if (!text) continue;
+                if (!text || seenTexts.has(text)) continue;
+                seenTexts.add(text);
                 const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
                 html += `<div data-row="${rowIdx}" data-col="${c}" ` +
                         `style="color:#8b949e; padding:3px 8px 3px 14px; font-family:monospace; ` +
@@ -527,7 +529,7 @@ function highlightSource(fr) {
     const conf = fr.confidence || 'none';
     const colours = {
         high:   { border: '#198754', mark: 'rgba(25,135,84,0.3)',  text: '#6ee7a0' },
-        medium: { border: '#dc3545', mark: 'rgba(220,53,69,0.25)', text: '#ff8c94' },
+        medium: { border: '#f97316', mark: 'rgba(249,115,22,0.20)', text: '#fdba74' },
         low:    { border: '#dc3545', mark: 'rgba(220,53,69,0.35)', text: '#ff6b6b' },
     };
     const colour = colours[conf];
@@ -658,17 +660,18 @@ function renderFieldTable(fields, groupName) {
         const isPending = !hasValue && fr.confidence === 'none' && !fr.edited;
 
         const confClass = !hasValue ? 'secondary' :
-                          isInferred ? 'danger' :
+                          isInferred ? 'warning' :
                           fr.confidence === 'high' ? 'success' :
                           fr.confidence === 'none' ? 'secondary' : 'danger';
+        const confStyle = isInferred ? 'background:#f97316!important;' : '';
         const confText = !hasValue ? (isPending ? 'PENDING' : 'EMPTY') :
                          isInferred ? 'INFERRED' :
                          fr.confidence === 'none' ? 'N/A' : (fr.confidence || 'low').toUpperCase();
         const safeValue = (fr.value || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const editedBadge = fr.edited ? '<span class="badge bg-info ms-1" style="font-size:9px">EDITED</span>' : '';
         const safeReason = (fr.reason || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const inputBorder = isInferred ? 'border-color: #dc3545 !important;' : '';
-        const rowBg = isInferred ? 'background-color: rgba(220, 53, 69, 0.05);' : '';
+        const inputBorder = isInferred ? 'border-color: #f97316 !important;' : '';
+        const rowBg = isInferred ? 'background-color: rgba(249,115,22,0.05);' : '';
         const frData = JSON.stringify({value: fr.value, confidence: fr.confidence, source_cell: fr.source_cell || null, source_snippet: fr.source_snippet || null});
         const safeFrData = frData.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         return `
@@ -682,7 +685,7 @@ function renderFieldTable(fields, groupName) {
                        onchange="editField('${groupName}', '${key}', this.value)">
             </td>
             <td class="text-center" style="min-width: 140px;">
-                <span class="badge bg-${confClass}" style="font-size:10px; cursor:help;"
+                <span class="badge bg-${confClass}" style="font-size:10px; cursor:help; ${confStyle}"
                       title="${safeReason}">${confText}</span>
                 ${editedBadge}
                 ${safeReason && confText !== 'EMPTY' && confText !== 'N/A' ? '<div class="text-muted mt-1" style="font-size:9px; line-height:1.2;">' + safeReason + '</div>' : ''}

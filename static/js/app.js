@@ -126,8 +126,8 @@ function initProcessPage() {
 }
 
 function startExtraction() {
-    const startBtn = document.getElementById('start-btn');
-    if (startBtn) startBtn.classList.add('d-none');
+    const parseResult = document.getElementById('parse-result');
+    if (parseResult) parseResult.classList.add('d-none');
 
     const progressSection = document.getElementById('progress-section');
     if (progressSection) progressSection.classList.remove('d-none');

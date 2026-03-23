@@ -268,7 +268,7 @@ def _run_extraction(patient_limit=None, concurrency=1):
     session.progress['start_time'] = time.time()
 
     _counter_lock = threading.Lock()
-    llm_semaphore = threading.Semaphore(1)
+    llm_semaphore = threading.Semaphore(concurrency)
 
     def process_patient(patient):
         if session.stop_requested:

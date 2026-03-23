@@ -19,8 +19,10 @@ from parser.docx_parser import parse_docx, get_raw_text
 from extractor.llm_client import (check_ollama, generate, get_backend, set_backend,
     check_ollama_available, check_claude_available, list_ollama_models, get_ollama_model, set_ollama_model, SUGGESTED_MODELS)
 from extractor.prompt_builder import build_prompt, build_all_prompts
+from extractor.clinical_context import get_context_for_group
 from extractor.response_parser import parse_llm_response
 from extractor.regex_extractor import regex_extract
+from extractor.preview_renderer import render_patient_preview
 from export.excel_writer import write_excel
 from config import get_groups, get_all_fields
 from audit import log_event
@@ -93,6 +95,17 @@ def upload():
             session.patients = patients
             session.status = 'parsed'
             session.progress['total'] = len(patients)
+
+            # Render patient preview images (non-fatal if Pillow unavailable)
+            # log_event is already used throughout app.py with signature (event_name, **kwargs)
+            try:
+                ts = safe_name.split('_')[0]
+                preview_dir = os.path.join('static', 'previews', ts)
+                os.makedirs(preview_dir, exist_ok=True)
+                for p in patients:
+                    render_patient_preview(p, preview_dir)
+            except Exception as preview_err:
+                log_event('preview_render_error', error=str(preview_err))
 
             log_event('upload', file_name=file.filename, patients_detected=len(patients))
 
@@ -318,6 +331,7 @@ def _run_extraction(patient_limit=None, concurrency=1):
     # Track per-patient group completion to avoid premature "done" signals.
     # Use a counter dict: {patient_id: number_of_llm_tasks_completed}
     _patient_group_counts = {p.id: 0 for p in patients_to_process}
+    _patient_start_times = {}
 
     def llm_phase(task):
         patient, group = task
@@ -326,7 +340,8 @@ def _run_extraction(patient_limit=None, concurrency=1):
         task_key = f"{patient.id}:{group['name']}"
         session.progress['active_patients'][task_key] = {
             "initials": patient.initials, "group": group['name'], "start": time.time(),
-            "status": "queued"
+            "status": "queued",
+            "has_context": bool(get_context_for_group(group['name'])),
         }
         with llm_semaphore:
             # Re-check after acquiring the semaphore: a waiting thread may have been
@@ -335,6 +350,9 @@ def _run_extraction(patient_limit=None, concurrency=1):
                 del session.progress['active_patients'][task_key]
                 return
             session.progress['active_patients'][task_key]['status'] = 'running'
+            with _counter_lock:
+                if patient.id not in _patient_start_times:
+                    _patient_start_times[patient.id] = time.time()
             try:
                 system_prompt, user_prompt = build_prompt(patient.raw_text, group)
                 raw_response = generate(user_prompt, system_prompt)
@@ -355,11 +373,17 @@ def _run_extraction(patient_limit=None, concurrency=1):
             # Patient is fully done only when ALL its actual LLM tasks have completed
             if _patient_group_counts[patient.id] == _patient_task_counts.get(patient.id, 0):
                 conf = _confidence_summary(patient)
+                # start time always set before this point (semaphore acquired first); fallback avoids KeyError only
+                elapsed = round(time.time() - _patient_start_times.get(patient.id, time.time()), 1)
+                session.progress['patient_times'].append(elapsed)
+                session.progress['average_seconds'] = round(
+                    sum(session.progress['patient_times']) / len(session.progress['patient_times']), 1
+                )
                 session.progress['completed_patients'].append({
                     "id": patient.id,
                     "initials": patient.initials,
                     "confidence_summary": conf,
-                    "seconds": 0,
+                    "seconds": elapsed,
                 })
 
     # max_workers=2: one runs (semaphore), one queues ready. Prevents gap between tasks.
@@ -458,6 +482,26 @@ def get_patient(patient_id):
         "raw_text": patient.raw_text,
         "raw_cells": patient.raw_cells,
         "extractions": extractions
+    })
+
+
+@app.route('/patient/<patient_id>/preview')
+def patient_preview(patient_id):
+    """Return rendered image URL and cell coordinate map for the patient."""
+    patient = next((p for p in session.patients if p.id == patient_id), None)
+    if not patient:
+        return jsonify({"error": "not found"}), 404
+    if not session.file_name:
+        return jsonify({"error": "no file"}), 404
+    ts = session.file_name.split('_')[0]
+    json_path = os.path.join('static', 'previews', ts, f'{patient_id}.json')
+    if not os.path.exists(json_path):
+        return jsonify({"error": "preview not available"}), 404
+    with open(json_path) as f:
+        coords = json.load(f)
+    return jsonify({
+        "image_url": f"/static/previews/{ts}/{patient_id}.png",
+        "coords": coords,
     })
 
 

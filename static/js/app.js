@@ -729,15 +729,9 @@ function initLiveReview() {
         .then(data => {
             if (data.status !== 'extracting') return;
             const source = new EventSource('/progress');
-            let lastCompleted = 0;
 
             source.onmessage = function(event) {
                 const d = JSON.parse(event.data);
-                const completed = (d.completed_patients || []).length;
-                if (completed > lastCompleted) {
-                    lastCompleted = completed;
-                    loadPatients();
-                }
                 if (d.status === 'complete' || d.status === 'stopped') {
                     source.close();
                     loadPatients();

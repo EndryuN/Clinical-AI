@@ -410,7 +410,7 @@ function selectPatient(patientId) {
                         window._previewCoords = preview.coords;
                         previewImg.onload = function() {
                             const canvas = document.getElementById('preview-canvas');
-                            if (canvas) {
+                            if (canvas && previewImg.clientWidth > 0) {
                                 canvas.width = previewImg.clientWidth;
                                 canvas.height = previewImg.clientHeight;
                             }
@@ -477,8 +477,13 @@ function highlightSource(fr) {
     if (!fr || fr.value === null || fr.value === undefined) return;
 
     const rows = MARKER_TO_ROWS[fr.source_snippet];
-    if (!rows || !window._previewCoords) {
+    if (!rows) {
+        // No annotation marker — field came from regex or LLM without a location
         if (fr.value !== null && fr.value !== '' && warning) warning.classList.remove('d-none');
+        return;
+    }
+    if (!window._previewCoords) {
+        // No preview available for this patient (e.g. Excel import) — not a hallucination
         return;
     }
 

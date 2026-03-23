@@ -14,6 +14,15 @@ def _mock_chat_response(content: str) -> MagicMock:
     return mock
 
 
+def _mock_claude_response(text: str) -> MagicMock:
+    mock = MagicMock()
+    mock.status_code = 200
+    mock.json.return_value = {
+        "content": [{"type": "text", "text": text}]
+    }
+    return mock
+
+
 def test_ollama_generate_sends_chat_format():
     """generate() must POST to /api/chat with messages array."""
     llm_client._backend = "ollama"
@@ -50,3 +59,21 @@ def test_generate_works_without_system_prompt():
     with patch.object(llm_client._session, 'post', return_value=_mock_chat_response('ok')) as mock_post:
         result = llm_client.generate("only user")
     assert result == "ok"
+
+
+def test_claude_generate_passes_system_prompt():
+    """Claude backend must send system_prompt as top-level 'system' key."""
+    llm_client._backend = "claude"
+    with patch.object(llm_client._session, 'post', return_value=_mock_claude_response('result')) as mock_post:
+        llm_client.generate("user msg", "system msg")
+    payload = mock_post.call_args[1]['json']
+    assert payload.get('system') == "system msg"
+
+
+def test_claude_generate_omits_system_key_when_empty():
+    """Claude backend must NOT include 'system' key when system_prompt is empty."""
+    llm_client._backend = "claude"
+    with patch.object(llm_client._session, 'post', return_value=_mock_claude_response('result')) as mock_post:
+        llm_client.generate("user msg")
+    payload = mock_post.call_args[1]['json']
+    assert 'system' not in payload

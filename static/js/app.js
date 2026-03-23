@@ -378,16 +378,17 @@ function selectPatient(patientId) {
             window._previewCoords = null;
             const previewImg = document.getElementById('preview-img');
             const previewPlaceholder = document.getElementById('preview-placeholder');
+            const previewCanvas = document.getElementById('preview-canvas');
+            
             fetch(`/patient/${patientId}/preview`)
                 .then(r => r.json())
                 .then(preview => {
                     if (preview.image_url && previewImg) {
                         window._previewCoords = preview.coords;
                         previewImg.onload = function() {
-                            const canvas = document.getElementById('preview-canvas');
-                            if (canvas && previewImg.clientWidth > 0) {
-                                canvas.width = previewImg.clientWidth;
-                                canvas.height = previewImg.clientHeight;
+                            if (previewCanvas && previewImg.clientWidth > 0) {
+                                previewCanvas.width = previewImg.clientWidth;
+                                previewCanvas.height = previewImg.clientHeight;
                             }
                         };
                         previewImg.onerror = function() {
@@ -397,12 +398,19 @@ function selectPatient(patientId) {
                         previewImg.src = preview.image_url;
                         previewImg.style.display = 'block';
                         if (previewPlaceholder) previewPlaceholder.style.display = 'none';
+                    } else {
+                        if (previewImg) previewImg.style.display = 'none';
+                        if (previewPlaceholder) previewPlaceholder.style.display = 'block';
                     }
                 })
-                .catch(() => {});
+                .catch(() => {
+                    if (previewImg) previewImg.style.display = 'none';
+                    if (previewPlaceholder) previewPlaceholder.style.display = 'block';
+                });
 
             // Store extractions for re-rendering on filter change
             allPatientExtractions = data.extractions || {};
+            // ... (rest of selectPatient)
 
             // Use schema order, but push completely empty tabs to the end
             const schemaOrder = Object.keys(schemaGroups);
@@ -451,14 +459,27 @@ function highlightSource(fr) {
 
     if (!fr || fr.value === null || fr.value === undefined) return;
 
-    const rows = MARKER_TO_ROWS[fr.source_snippet];
-    if (!rows) {
-        // No annotation marker — field came from regex or LLM without a location
+    let rows = MARKER_TO_ROWS[fr.source_snippet];
+    let cellsToHighlight = [];
+
+    if (rows) {
+        for (const row of rows) {
+            for (let col = 0; col < 3; col++) {
+                cellsToHighlight.push({row: row, col: col});
+            }
+        }
+    } else if (fr.source_cell) {
+        cellsToHighlight.push(fr.source_cell);
+    }
+
+    if (cellsToHighlight.length === 0) {
+        // No annotation marker and no source cell — field came from LLM without a location
         if (fr.value !== null && fr.value !== '' && warning) warning.classList.remove('d-none');
         return;
     }
+
     if (!window._previewCoords) {
-        // No preview available for this patient (e.g. Excel import) — not a hallucination
+        // No preview available for this patient (e.g. Excel import where original preview is missing)
         return;
     }
 
@@ -477,17 +498,15 @@ function highlightSource(fr) {
     ctx.strokeStyle = colour.stroke;
     ctx.lineWidth = 2;
 
-    for (const row of rows) {
-        for (let col = 0; col < 3; col++) {
-            const cell = window._previewCoords[`${row},${col}`];
-            if (!cell) continue;
-            const x = cell.x * scaleX;
-            const y = cell.y * scaleY;
-            const w = cell.w * scaleX;
-            const h = cell.h * scaleY;
-            ctx.fillRect(x, y, w, h);
-            ctx.strokeRect(x, y, w, h);
-        }
+    for (const cellPos of cellsToHighlight) {
+        const cell = window._previewCoords[`${cellPos.row},${cellPos.col}`];
+        if (!cell) continue;
+        const x = cell.x * scaleX;
+        const y = cell.y * scaleY;
+        const w = cell.w * scaleX;
+        const h = cell.h * scaleY;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeRect(x, y, w, h);
     }
 }
 
@@ -724,4 +743,43 @@ function initLiveReview() {
 // Only run on review page
 if (document.getElementById('source-panel')) {
     initLiveReview();
+}
+
+function linkSourceFile(file) {
+    if (!file) return;
+    const btn = document.getElementById('btn-link-source');
+    const originalText = btn.textContent;
+    btn.textContent = 'Linking...';
+    btn.disabled = true;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/link-source', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+            btn.textContent = originalText;
+            btn.disabled = false;
+            if (data.error) {
+                alert('Link failed: ' + data.error);
+                return;
+            }
+            const successDiv = document.getElementById('link-success');
+            const countSpan = document.getElementById('link-match-count');
+            const linkMatchCount = document.getElementById('link-match-count');
+            if (successDiv && linkMatchCount) {
+                linkMatchCount.textContent = data.matched;
+                successDiv.classList.remove('d-none');
+                setTimeout(() => successDiv.classList.add('d-none'), 5000);
+            }
+            // Refresh current patient preview if one is selected
+            if (currentPatientId) {
+                selectPatient(currentPatientId);
+            }
+        })
+        .catch(err => {
+            btn.textContent = originalText;
+            btn.disabled = false;
+            alert('Link failed: ' + err);
+        });
 }

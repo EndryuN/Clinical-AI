@@ -141,12 +141,30 @@ def _import_excel(file_path: str) -> list:
     meta_lookup = {}
     if "Metadata" in wb.sheetnames:
         ws_meta = wb["Metadata"]
-        for row in ws_meta.iter_rows(min_row=2, values_only=True):
-            pid, fkey, conf, reason, *_ = row
+        # Row 1 might be SOURCE_FILE
+        if ws_meta.cell(row=1, column=1).value == "SOURCE_FILE":
+            session.file_name = ws_meta.cell(row=1, column=2).value or ""
+        
+        # Data starts from row 3 if Row 1 is SOURCE_FILE, else row 2
+        start_row = 3 if ws_meta.cell(row=1, column=1).value == "SOURCE_FILE" else 2
+        for row in ws_meta.iter_rows(min_row=start_row, values_only=True):
+            pid, fkey, conf, reason, *extra = row
+            source_cell = None
+            source_snippet = None
+            if len(extra) >= 2:
+                source_cell_json, source_snippet = extra[0:2]
+                if source_cell_json:
+                    try:
+                        source_cell = json.loads(source_cell_json)
+                    except:
+                        pass
+            
             if pid and fkey:
                 meta_lookup[(str(pid), str(fkey))] = {
                     "confidence": conf or 'high',
-                    "reason": reason or ''
+                    "reason": reason or '',
+                    "source_cell": source_cell,
+                    "source_snippet": source_snippet
                 }
 
     ws = wb.active
@@ -160,7 +178,6 @@ def _import_excel(file_path: str) -> list:
             continue
 
         # Determine patient_id early (needed for meta_lookup)
-        # Early MRN read: needed before extractions loop for Metadata sheet lookup
         mrn_col = next((f['excel_column'] for f in all_fields if f['key'] == 'mrn'), None)
         mrn_cell_val = ws.cell(row=row_idx, column=mrn_col).value if mrn_col else None
         patient_id = str(mrn_cell_val).strip() if mrn_cell_val else f"patient_{row_idx - 1:03d}"
@@ -178,7 +195,9 @@ def _import_excel(file_path: str) -> list:
                     group_fields[field['key']] = FieldResult(
                         value=value,
                         confidence=meta.get('confidence', 'high'),
-                        reason=meta.get('reason', '')
+                        reason=meta.get('reason', ''),
+                        source_cell=meta.get('source_cell'),
+                        source_snippet=meta.get('source_snippet')
                     )
                 else:
                     group_fields[field['key']] = FieldResult(value=None, confidence='none')
@@ -569,7 +588,7 @@ def export():
         return jsonify({"error": "No data to export"}), 400
 
     output_path = os.path.join(app.config['UPLOAD_FOLDER'], 'export.xlsx')
-    write_excel(session.patients, output_path)
+    write_excel(session.patients, output_path, source_name=session.file_name)
 
     log_event('export', patients_exported=len(session.patients), format='xlsx')
 
@@ -741,17 +760,69 @@ def backend():
     })
 
 
-@app.route('/reset', methods=['POST'])
-def reset():
-    """Wipe all session data and start fresh."""
-    global session
-    session = ExtractionSession()
-    # Clear audit log
-    log_path = os.path.join(os.path.dirname(__file__), 'logs', 'audit.jsonl')
-    if os.path.exists(log_path):
-        os.remove(log_path)
-    log_event('reset')
-    return jsonify({"status": "ok"})
+@app.route('/link-source', methods=['POST'])
+def link_source():
+    """Upload a .docx to link previews/cells to an existing session (e.g. after Excel import)."""
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+    if not session.patients:
+        return jsonify({"error": "No active session to link to"}), 400
+
+    file = request.files['file']
+    if not file.filename.lower().endswith('.docx'):
+        return jsonify({"error": "Only .docx files can be linked as source"}), 400
+
+    # Save with timestamp
+    import time
+    safe_name = f"{int(time.time())}_{file.filename}"
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_name)
+    file.save(file_path)
+
+    try:
+        new_patients = parse_docx(file_path)
+        linked_count = 0
+
+        # Match by ID (Hospital Number) or NHS Number or Initials
+        for p_existing in session.patients:
+            match = None
+            # 1. Try ID (Hospital Number)
+            match = next((np for np in new_patients if np.id == p_existing.id), None)
+            
+            # 2. Try NHS Number
+            if not match and p_existing.nhs_number:
+                match = next((np for np in new_patients if np.nhs_number == p_existing.nhs_number), None)
+            
+            # 3. Try Initials (less reliable, but better than nothing if 1 & 2 fail)
+            if not match and p_existing.initials:
+                # Only match by initials if there's exactly one candidate in the new file
+                candidates = [np for np in new_patients if np.initials == p_existing.initials]
+                if len(candidates) == 1:
+                    match = candidates[0]
+
+            if match:
+                p_existing.raw_cells = match.raw_cells
+                p_existing.raw_text = match.raw_text
+                linked_count += 1
+
+        # Render previews for all patients (even if some didn't match, we try)
+        ts = safe_name.split('_')[0]
+        preview_dir = os.path.join(app.static_folder, 'previews', ts)
+        os.makedirs(preview_dir, exist_ok=True)
+        for p in session.patients:
+            if p.raw_cells: # Only render if we have cells
+                render_patient_preview(p, preview_dir)
+
+        session.file_name = safe_name
+        log_event('link_source', file_name=file.filename, matched=linked_count)
+
+        return jsonify({
+            "status": "ok",
+            "matched": linked_count,
+            "total": len(session.patients)
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # Helper functions

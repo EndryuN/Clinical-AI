@@ -1,3 +1,4 @@
+import json
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment
 from config import get_all_fields, get_groups
@@ -15,7 +16,7 @@ def _get_group_colors() -> dict:
     return colors
 
 
-def write_excel(patients: list, output_path: str):
+def write_excel(patients: list, output_path: str, source_name: str = ""):
     wb = Workbook()
     ws = wb.active
     ws.title = "Prototype V1"
@@ -84,21 +85,25 @@ def write_excel(patients: list, output_path: str):
     # Hidden Metadata sheet — stores confidence + reasoning for round-trip fidelity
     ws_meta = wb.create_sheet("Metadata")
     ws_meta.sheet_state = 'hidden'
-    ws_meta.append(["patient_id", "field_key", "confidence", "reason"])
+    # Row 1: GLOBAL METADATA (e.g. source file name for previews)
+    ws_meta.append(["SOURCE_FILE", source_name])
+    # Row 2: Headers
+    ws_meta.append(["patient_id", "field_key", "confidence", "reason", "source_cell", "source_snippet"])
     for idx, patient in enumerate(patients):
         # Use MRN as patient_id to match the identifier _import_excel reconstructs.
-        # Fallback uses 1-based index with 3-digit padding to match the importer's
-        # f"patient_{row_idx - 1:03d}" scheme (row_idx starts at 2, so patient 1 → patient_001).
         demo = patient.extractions.get("Demographics", {})
         mrn_fr = demo.get("mrn")
         meta_pid = (mrn_fr.value if mrn_fr and mrn_fr.value else None) or f"patient_{idx + 1:03d}"
         for group_name, fields in patient.extractions.items():
             for field_key, fr in fields.items():
+                source_cell_json = json.dumps(fr.source_cell) if fr.source_cell else None
                 ws_meta.append([
                     meta_pid,
                     field_key,
                     fr.confidence or 'none',
-                    fr.reason or ''
+                    fr.reason or '',
+                    source_cell_json,
+                    fr.source_snippet or ''
                 ])
 
     wb.save(output_path)

@@ -5,3 +5,4 @@ pyyaml>=6.0
 requests>=2.31
 pytest>=8.0
 pyspellchecker>=0.8
+Pillow>=10.0

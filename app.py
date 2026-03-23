@@ -336,8 +336,8 @@ def _run_extraction(patient_limit=None, concurrency=1):
                 return
             session.progress['active_patients'][task_key]['status'] = 'running'
             try:
-                prompt = build_prompt(patient.raw_text, group)
-                raw_response = generate(prompt)
+                system_prompt, user_prompt = build_prompt(patient.raw_text, group)
+                raw_response = generate(user_prompt, system_prompt)
                 llm_results = parse_llm_response(raw_response, group)
                 for key, llm_fr in llm_results.items():
                     current = patient.extractions[group['name']].get(key)
@@ -511,8 +511,8 @@ def re_extract(patient_id):
                     if group.get('llm_required', False):
                         gaps = sum(1 for fr in results.values() if fr.value is None)
                         if gaps > 0:
-                            prompt = build_prompt(patient.raw_text, group)
-                            raw_response = generate(prompt)
+                            system_prompt, user_prompt = build_prompt(patient.raw_text, group)
+                            raw_response = generate(user_prompt, system_prompt)
                             llm_results = parse_llm_response(raw_response, group)
                             for key, llm_fr in llm_results.items():
                                 if key in results and results[key].value is None and llm_fr.value is not None:
@@ -746,7 +746,8 @@ def _resolve_source_cell(patient, fr):
     for cell in patient.raw_cells:
         if fr.value in cell["text"]:
             fr.source_cell = {"row": cell["row"], "col": cell["col"]}
-            fr.source_snippet = fr.value  # approximate — raw LLM token not available
+            if fr.source_snippet is None:     # don't overwrite LLM-provided annotation marker
+                fr.source_snippet = fr.value  # approximate — raw LLM token not available
             return
 
 

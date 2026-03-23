@@ -208,72 +208,28 @@ function listenProgress() {
             return;
         }
 
-        const phase = data.phase || 'idle';
         const total = data.total || 0;
+        const donePatientsCount = (data.completed_patients || []).length;
+        const overallPct = total > 0 ? (donePatientsCount / total * 100).toFixed(0) : 0;
 
-        // Regex bar: regex_complete / total
-        const regexPct = total > 0 ? ((data.regex_complete || 0) / total * 100).toFixed(0) : 0;
-
-        // LLM bar: patients fully done / total patients
-        const llmTotal = data.llm_queue_size || 0;
-        const llmDonePatients = (data.completed_patients || []).length;
-        const llmPct = total > 0 ? (llmDonePatients / total * 100).toFixed(0) : 0;
-
-        const regexBar = document.getElementById('progress-bar-regex');
-        const llmBar = document.getElementById('progress-bar-llm');
+        const progressBar = document.getElementById('progress-bar');
         const progressText = document.getElementById('progress-text');
-        const phaseDetail = document.getElementById('phase-detail');
         const activePatientsList = document.getElementById('active-patients-list');
         const averageSpeedEl = document.getElementById('average-speed');
 
-        if (regexBar) {
-            regexBar.style.width = regexPct + '%';
-            // Animate while regex is active, freeze once done
-            if (phase === 'regex') {
-                regexBar.className = 'progress-bar bg-success progress-bar-striped progress-bar-animated';
-            } else {
-                regexBar.className = 'progress-bar bg-success';
-            }
-        }
+        if (progressBar) progressBar.style.width = overallPct + '%';
 
-        if (llmBar) {
-            llmBar.style.width = llmPct + '%';
-            // Animate while LLM is active
-            if (phase === 'llm') {
-                llmBar.className = 'progress-bar bg-primary progress-bar-striped progress-bar-animated';
-            } else {
-                llmBar.className = 'progress-bar bg-primary';
-            }
-        }
-
-        // Regex label: always show actual regex counts
         if (progressText) {
-            const regexDone = data.regex_complete || 0;
-            if (phase === 'llm' || phase === 'complete') {
-                progressText.textContent = `${regexDone} / ${total} ✓`;
-            } else {
-                progressText.textContent = `${regexDone} / ${total} patients`;
-            }
-        }
-
-        // LLM label: patients fully completed
-        if (phaseDetail) {
-            if (phase === 'llm') {
-                const done = (data.completed_patients || []).length;
-                phaseDetail.textContent = `${done} / ${total} patients`;
-            } else {
-                phaseDetail.textContent = '';
-            }
+            progressText.textContent = `${donePatientsCount} / ${total} patients`;
         }
 
         if (averageSpeedEl && data.average_seconds > 0) {
             averageSpeedEl.textContent = `${data.average_seconds}s / patient`;
         }
 
-        // Render active patients — improved card styling
+        // Render active patient cards — each with its own group progress bar
         if (activePatientsList) {
-            // Only show tasks that are actually running (not queued waiting for semaphore)
-            const active = Object.entries(data.active_patients || {}).filter(([, p]) => p.status !== 'queued');
+            const active = Object.entries(data.active_patients || {});
             if (active.length === 0) {
                 activePatientsList.innerHTML = '<span class="text-muted small">Waiting...</span>';
             } else {
@@ -281,18 +237,24 @@ function listenProgress() {
                     const elapsed = Math.floor((Date.now() - (p.start * 1000)) / 1000);
                     const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
                     const secs = (elapsed % 60).toString().padStart(2, '0');
-                    const isRegex = p.group === 'Regex';
                     const isQueued = p.status === 'queued';
-                    const accentColor = isRegex ? '#198754' : isQueued ? '#4b5563' : '#0d6efd';
+                    const accentColor = isQueued ? '#4b5563' : '#0d6efd';
                     const timerColor = isQueued ? '#6b7280' : '#f59e0b';
                     const groupLabel = isQueued ? `⏳ ${p.group}` : p.group || 'Starting...';
                     const contextBadge = (!isQueued && p.has_context)
                         ? `<span style="font-size:9px; background:#1e3a5f; color:#60a5fa; border:1px solid #2563eb; border-radius:3px; padding:1px 4px; margin-left:5px; vertical-align:middle;">G049</span>`
                         : '';
-                    return `<div style="background:#111827; border:1px solid ${accentColor}; border-radius:6px; padding:8px 12px; min-width:155px; opacity:${isQueued ? '0.6' : '1'};">` +
+                    const groupsDone = p.groups_done || 0;
+                    const groupsTotal = p.groups_total || 1;
+                    const groupPct = Math.round(groupsDone / groupsTotal * 100);
+                    const miniBarColor = isQueued ? '#374151' : '#2563eb';
+                    return `<div style="background:#111827; border:1px solid ${accentColor}; border-radius:6px; padding:8px 12px; min-width:160px; opacity:${isQueued ? '0.7' : '1'};">` +
                            `<div style="font-size:12px; font-weight:700; color:#f0f0f0; letter-spacing:0.5px;">${p.initials || 'Patient'}</div>` +
                            `<div style="font-size:10px; color:#9ca3af; margin-top:2px;">${groupLabel}${contextBadge}</div>` +
                            `<div style="font-size:14px; font-weight:700; color:${timerColor}; font-family:monospace; margin-top:4px;">${mins}:${secs}</div>` +
+                           `<div style="margin-top:6px; background:#1f2937; border-radius:3px; height:3px; overflow:hidden;">` +
+                           `<div style="width:${groupPct}%; height:100%; background:${miniBarColor}; transition:width 0.5s ease;"></div>` +
+                           `</div>` +
                            `</div>`;
                 }).join('');
             }

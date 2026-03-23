@@ -312,6 +312,8 @@ def _run_extraction(patient_limit=None, concurrency=1):
             "start": start_time,
             "status": "queued",
             "has_context": bool(get_context_for_group(patient_llm_groups[0]['name'])),
+            "groups_done": 0,
+            "groups_total": len(patient_llm_groups),
         }
 
         for group in patient_llm_groups:
@@ -338,6 +340,7 @@ def _run_extraction(patient_limit=None, concurrency=1):
                             patient.extractions[group['name']][key] = llm_fr
                 except Exception as e:
                     log_event('llm_extraction_error', patient_id=patient.id, group=group['name'], error=str(e))
+            session.progress['active_patients'][patient.id]['groups_done'] += 1
 
         session.progress['active_patients'].pop(patient.id, None)
 

@@ -31,18 +31,9 @@ Confidence levels:
 - "low": the value is ambiguous, unclear, or you are guessing based on limited information
 
 {g049_section}Return ONLY valid JSON in this exact format:
-{{{{
+{{
 {json_example}
-}}}}"""
-
-_USER_TEMPLATE = """Fields to extract:
-{field_list}
-
-Patient MDT Notes:
----
-{patient_text}
----"""
-
+}}"""
 
 def build_prompt(patient_text: str, group: dict) -> tuple[str, str]:
     """Build system and user prompts for a specific schema group.
@@ -65,9 +56,9 @@ def build_prompt(patient_text: str, group: dict) -> tuple[str, str]:
         g049_section=g049_section,
         json_example=json_example,
     )
-    user_prompt = _USER_TEMPLATE.format(
-        field_list=field_list,
-        patient_text=patient_text,
+    user_prompt = (
+        f"Fields to extract:\n{field_list}\n\n"
+        f"Patient MDT Notes:\n---\n{patient_text}\n---"
     )
     return system_prompt, user_prompt
 

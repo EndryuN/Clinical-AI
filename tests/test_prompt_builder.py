@@ -38,7 +38,18 @@ def test_system_prompt_contains_g049_context_for_histology():
 
 def test_system_prompt_no_g049_context_for_demographics():
     system, user = build_prompt("patient text", _demo_group("Demographics"))
-    assert isinstance(system, str)
+    assert "G049" not in system and "Clinical Reference" not in system
+
+
+def test_system_prompt_json_fence_uses_single_braces():
+    system, user = build_prompt("patient text", _demo_group())
+    assert "{\n" in system and "\n}" in system
+
+
+def test_user_prompt_safe_with_curly_braces_in_patient_text():
+    # Patient notes can contain curly braces (e.g. lab values) — must not crash
+    system, user = build_prompt("CEA {1.2} ng/mL", _demo_group())
+    assert "CEA {1.2} ng/mL" in user
 
 
 def test_user_prompt_contains_patient_text():

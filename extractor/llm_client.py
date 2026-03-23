@@ -20,7 +20,7 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 OLLAMA_URL = "http://localhost:11434"
 CLAUDE_URL = "https://api.anthropic.com/v1/messages"
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
-TIMEOUT = 120
+TIMEOUT = 300
 
 # Runtime state
 _backend = "claude" if ANTHROPIC_API_KEY else "ollama"
@@ -86,14 +86,14 @@ def check_ollama() -> bool:
     return check_ollama_available()
 
 
-def generate(prompt: str) -> str:
+def generate(user_prompt: str, system_prompt: str = "") -> str:
     """Send a prompt to the selected LLM backend."""
     if _backend == "claude":
-        return _generate_claude(prompt)
-    return _generate_ollama(prompt)
+        return _generate_claude(user_prompt, system_prompt)
+    return _generate_ollama(user_prompt, system_prompt)
 
 
-def _generate_claude(prompt: str) -> str:
+def _generate_claude(user_prompt: str, system_prompt: str = "") -> str:
     headers = {
         "x-api-key": ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
@@ -104,9 +104,11 @@ def _generate_claude(prompt: str) -> str:
         "max_tokens": 4096,
         "temperature": 0,
         "messages": [
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": user_prompt}
         ]
     }
+    if system_prompt:
+        payload["system"] = system_prompt
     try:
         resp = _session.post(CLAUDE_URL, headers=headers, json=payload, timeout=TIMEOUT)
         resp.raise_for_status()
@@ -123,20 +125,25 @@ def _generate_claude(prompt: str) -> str:
         raise TimeoutError(f"Claude API timed out after {TIMEOUT}s")
 
 
-def _generate_ollama(prompt: str) -> str:
+def _generate_ollama(user_prompt: str, system_prompt: str = "") -> str:
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": user_prompt})
     payload = {
         "model": _ollama_model,
-        "prompt": prompt,
         "stream": False,
+        "think": False,
         "options": {
             "temperature": 0,
             "num_ctx": 8192
-        }
+        },
+        "messages": messages
     }
     try:
-        resp = _session.post(f"{OLLAMA_URL}/api/generate", json=payload, timeout=TIMEOUT)
+        resp = _session.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=TIMEOUT)
         resp.raise_for_status()
-        return resp.json().get('response', '')
+        return resp.json().get('message', {}).get('content', '')
     except requests.ConnectionError:
         raise ConnectionError("Cannot connect to Ollama. Is it running? Start with: ollama serve")
     except requests.Timeout:

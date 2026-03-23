@@ -9,3 +9,6 @@ dist/
 build/
 .claude/
 .pytest_cache/
+static/
+groundtruth/
+docs/

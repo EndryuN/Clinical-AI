@@ -146,5 +146,7 @@ def _generate_ollama(user_prompt: str, system_prompt: str = "") -> str:
         return resp.json().get('message', {}).get('content', '')
     except requests.ConnectionError:
         raise ConnectionError("Cannot connect to Ollama. Is it running? Start with: ollama serve")
+    except requests.HTTPError as e:
+        raise ConnectionError(f"Ollama API error: {e.response.status_code} - {e.response.text}")
     except requests.Timeout:
         raise TimeoutError(f"Ollama request timed out after {TIMEOUT}s")

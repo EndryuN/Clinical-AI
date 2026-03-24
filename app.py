@@ -521,6 +521,9 @@ def _run_extraction(patient_limit=None, concurrency=1):
     session.status = 'complete' if not session.stop_requested else 'stopped'
     session.progress['phase'] = 'complete'
 
+    # Save benchmark results for model comparison
+    _save_benchmark(session.progress.get('completed_patients', []))
+
 
 @app.route('/progress')
 def progress():
@@ -1076,6 +1079,59 @@ def _extract_treatment_keywords(text: str) -> list[str]:
             found.append(label)
 
     return found if found else ['Other']
+
+
+def _save_benchmark(completed_patients: list) -> None:
+    """Save extraction benchmark to data/benchmarks.xlsx — one sheet per model."""
+    try:
+        from openpyxl import load_workbook, Workbook
+        from extractor.llm_client import get_backend, get_ollama_model
+
+        benchmark_path = os.path.join(app.config['UPLOAD_FOLDER'], 'benchmarks.xlsx')
+        model_name = get_ollama_model() if get_backend() == 'ollama' else 'claude-api'
+        # Sanitize sheet name (Excel limit: 31 chars, no special chars)
+        sheet_name = model_name.replace(':', '_').replace('/', '_')[:31]
+
+        # Load existing or create new
+        try:
+            wb = load_workbook(benchmark_path)
+        except FileNotFoundError:
+            wb = Workbook()
+            wb.remove(wb.active)  # remove default empty sheet
+
+        # Remove old sheet with same name if exists (overwrite)
+        if sheet_name in wb.sheetnames:
+            del wb[sheet_name]
+
+        ws = wb.create_sheet(sheet_name)
+        ws.append(["Initials", "High", "Medium", "Low", "Seconds"])
+
+        for p in completed_patients:
+            c = p.get("confidence_summary", {})
+            ws.append([
+                p.get("initials", p.get("id", "")),
+                c.get("high", 0),
+                c.get("medium", 0),
+                c.get("low", 0),
+                p.get("llm_seconds", p.get("seconds", 0)),
+            ])
+
+        # Summary row
+        total = len(completed_patients)
+        if total > 0:
+            ws.append([])  # blank row
+            ws.append([
+                f"Total: {total} patients",
+                f"=SUM(B2:B{total+1})",
+                f"=SUM(C2:C{total+1})",
+                f"=SUM(D2:D{total+1})",
+                f"=AVERAGE(E2:E{total+1})",
+            ])
+
+        wb.save(benchmark_path)
+        log_event('benchmark_saved', model=model_name, patients=total)
+    except Exception as e:
+        log_event('benchmark_error', error=str(e))
 
 
 def _confidence_summary(patient):

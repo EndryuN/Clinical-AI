@@ -486,7 +486,13 @@ function highlightSource(fr) {
 
     if (!fr || fr.value === null || fr.value === undefined) return;
 
+    // Check for annotation marker: exact match or contained in snippet
     let rows = MARKER_TO_ROWS[fr.source_snippet];
+    if (!rows && fr.source_snippet) {
+        for (const [marker, r] of Object.entries(MARKER_TO_ROWS)) {
+            if (fr.source_snippet.includes(marker)) { rows = r; break; }
+        }
+    }
     let cellsToHighlight = [];
 
     if (rows) {
@@ -500,8 +506,11 @@ function highlightSource(fr) {
     }
 
     if (cellsToHighlight.length === 0) {
-        // No annotation marker and no source cell — field came from LLM without a location
-        if (fr.value !== null && fr.value !== '' && warning) warning.classList.remove('d-none');
+        // No source cell — only warn for LLM-inferred fields, not regex extractions
+        if (fr.value !== null && fr.value !== '' &&
+            fr.confidence_basis !== 'structured_verbatim' && warning) {
+            warning.classList.remove('d-none');
+        }
         return;
     }
 

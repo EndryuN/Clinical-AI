@@ -896,16 +896,17 @@ function renderCoverageOverlay(show, coords) {
     const previewImg = document.getElementById('preview-img');
     if (!previewImg || previewImg.naturalWidth === 0) return;
 
-    const scaleX = previewImg.clientWidth / previewImg.naturalWidth;
-    const scaleY = previewImg.clientHeight / previewImg.naturalHeight;
+    const natW = previewImg.naturalWidth;
+    const natH = previewImg.naturalHeight;
 
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.id = 'coverage-svg-overlay';
-    svg.style.cssText = 'position:absolute;top:0;left:0;' +
-        'width:' + previewImg.clientWidth + 'px;' +
-        'height:' + previewImg.clientHeight + 'px;' +
-        'pointer-events:none;z-index:10;';
+    // Use viewBox matching the PNG pixel dimensions so coords map 1:1
+    svg.setAttribute('viewBox', '0 0 ' + natW + ' ' + natH);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;';
 
+    let rectCount = 0;
     for (const [cellKey, spans] of Object.entries(_coverageMap)) {
         if (!spans || spans.length === 0) continue;
         const cellCoord = coords[cellKey];
@@ -916,23 +917,25 @@ function renderCoverageOverlay(show, coords) {
         if (totalLen === 0 || unusedLen === 0) continue;
 
         const ratio = unusedLen / totalLen;
-        const opacity = Math.min(0.5, ratio * 0.6);
+        const opacity = Math.min(0.5, 0.15 + ratio * 0.5);
 
         const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        rect.setAttribute('x', cellCoord.x * scaleX);
-        rect.setAttribute('y', cellCoord.y * scaleY);
-        rect.setAttribute('width', cellCoord.w * scaleX);
-        rect.setAttribute('height', cellCoord.h * scaleY);
+        rect.setAttribute('x', cellCoord.x);
+        rect.setAttribute('y', cellCoord.y);
+        rect.setAttribute('width', cellCoord.w);
+        rect.setAttribute('height', cellCoord.h);
         rect.setAttribute('fill', 'rgba(255,140,0,' + opacity + ')');
-        rect.setAttribute('stroke', 'rgba(255,120,0,0.7)');
-        rect.setAttribute('stroke-width', '2');
-        rect.setAttribute('stroke-dasharray', '4,2');
+        rect.setAttribute('stroke', 'rgba(255,120,0,0.8)');
+        rect.setAttribute('stroke-width', '3');
+        rect.setAttribute('stroke-dasharray', '6,3');
         svg.appendChild(rect);
+        rectCount++;
     }
 
-    const previewContainer = document.getElementById('preview-container');
-    if (previewContainer) {
-        previewContainer.style.position = 'relative';
-        previewContainer.appendChild(svg);
+    if (rectCount > 0) {
+        const previewContainer = document.getElementById('preview-container');
+        if (previewContainer) {
+            previewContainer.appendChild(svg);
+        }
     }
 }

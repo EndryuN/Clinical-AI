@@ -60,8 +60,13 @@ def upload():
     if not (filename.endswith('.docx') or filename.endswith('.xlsx')):
         return jsonify({"error": "Only .docx and .xlsx files are supported"}), 400
 
-    # Save file with timestamp to avoid permission errors on re-upload
-    import time
+    # Save file — clean up previous uploads first
+    import time, glob
+    for old in glob.glob(os.path.join(app.config['UPLOAD_FOLDER'], '*_*.*')):
+        try:
+            os.remove(old)
+        except OSError:
+            pass
     safe_name = f"{int(time.time())}_{file.filename}"
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_name)
     file.save(file_path)

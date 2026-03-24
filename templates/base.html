@@ -16,7 +16,7 @@
             <a class="navbar-brand" href="/">&#x1f3e5; MDT Extractor</a>
             <div class="navbar-nav ms-auto align-items-center">
                 {% if session_active %}
-                <a class="nav-link" href="/process">Process</a>
+                <a class="nav-link" href="/process">Process <span id="nav-progress" class="badge bg-primary ms-1 d-none" style="font-size:10px;"></span></a>
                 <a class="nav-link" href="/review">Review</a>
                 <a class="nav-link" href="/analytics-page">Analytics</a>
                 <a class="btn btn-success btn-sm ms-2" href="/export">Export Excel</a>
@@ -53,6 +53,30 @@
         const saved = localStorage.getItem('theme') || 'dark';
         document.documentElement.setAttribute('data-bs-theme', saved);
         updateThemeIcon(saved);
+    })();
+
+    // Navbar progress badge — polls /status to show extraction progress
+    (function() {
+        const badge = document.getElementById('nav-progress');
+        if (!badge) return;
+        let interval = null;
+        function poll() {
+            fetch('/status').then(r => r.json()).then(d => {
+                if (d.status === 'extracting') {
+                    badge.textContent = d.current + '/' + d.total;
+                    badge.classList.remove('d-none');
+                } else if (d.status === 'complete' || d.status === 'stopped') {
+                    badge.textContent = d.total + '/' + d.total;
+                    badge.classList.remove('d-none', 'bg-primary');
+                    badge.classList.add('bg-success');
+                    clearInterval(interval);
+                } else {
+                    badge.classList.add('d-none');
+                }
+            }).catch(() => {});
+        }
+        poll();
+        interval = setInterval(poll, 3000);
     })();
     </script>
     {% block scripts %}{% endblock %}

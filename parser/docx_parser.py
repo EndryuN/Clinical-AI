@@ -134,20 +134,25 @@ def _table_to_text(table) -> str:
 def _table_to_cells(table) -> list[CellRef]:
     """Return all cells in the table as a flat list with stable row/col coordinates.
 
-    Merged cells (common in Word tables) are deduplicated using the underlying
-    XML element identity — only the first occurrence of each cell is kept.
+    Duplicate cells are removed using two strategies:
+    1. XML element identity (python-docx merged cells share the same _tc)
+    2. Adjacent text comparison (Word sometimes copies content without true merge)
     Column indices are renumbered sequentially per row after deduplication.
     """
     cells = []
     for i, row in enumerate(table.rows):
         seen_tcs = set()
+        prev_text = None
         col_idx = 0
         for cell in row.cells:
             tc_id = id(cell._tc)
-            if tc_id in seen_tcs:
-                continue  # skip duplicate from merged cell
+            text = cell.text.strip()
+            # Skip if same XML element (true merge) or same text as previous cell
+            if tc_id in seen_tcs or (prev_text is not None and text == prev_text):
+                continue
             seen_tcs.add(tc_id)
-            cells.append({"row": i, "col": col_idx, "text": cell.text.strip()})
+            prev_text = text
+            cells.append({"row": i, "col": col_idx, "text": text})
             col_idx += 1
     return cells
 

@@ -10,13 +10,13 @@ def test_excel_exports_metadata_sheet():
         id="p001", initials="AO", nhs_number="9990000001", raw_text="test",
         extractions={
             "Demographics": {
-                "dob": FieldResult(value="26/05/1970", confidence="high", reason="regex match"),
-                "initials": FieldResult(value="AO", confidence="high", reason=""),
-                "mrn": FieldResult(value="9990001", confidence="high", reason=""),
-                "nhs_number": FieldResult(value="9990000001", confidence="medium", reason="LLM inferred"),
-                "gender": FieldResult(value="Male", confidence="high", reason=""),
-                "previous_cancer": FieldResult(value=None, confidence="none", reason=""),
-                "previous_cancer_site": FieldResult(value=None, confidence="none", reason=""),
+                "dob": FieldResult(value="26/05/1970", confidence_basis="structured_verbatim", reason="regex match"),
+                "initials": FieldResult(value="AO", confidence_basis="structured_verbatim", reason=""),
+                "mrn": FieldResult(value="9990001", confidence_basis="structured_verbatim", reason=""),
+                "nhs_number": FieldResult(value="9990000001", confidence_basis="freeform_verbatim", reason="LLM inferred"),
+                "gender": FieldResult(value="Male", confidence_basis="structured_verbatim", reason=""),
+                "previous_cancer": FieldResult(value=None, confidence_basis="absent", reason=""),
+                "previous_cancer_site": FieldResult(value=None, confidence_basis="absent", reason=""),
             }
         }
     )
@@ -50,13 +50,13 @@ def test_excel_round_trip_restores_confidence_and_reason():
         id="p001", initials="AO", nhs_number="9990000001", raw_text="test",
         extractions={
             "Demographics": {
-                "dob": FieldResult(value="26/05/1970", confidence="high", reason="regex"),
-                "initials": FieldResult(value="AO", confidence="high", reason=""),
-                "mrn": FieldResult(value="9990001", confidence="high", reason=""),
-                "nhs_number": FieldResult(value="9990000001", confidence="medium", reason="LLM"),
-                "gender": FieldResult(value="Male", confidence="high", reason=""),
-                "previous_cancer": FieldResult(value=None, confidence="none", reason=""),
-                "previous_cancer_site": FieldResult(value=None, confidence="none", reason=""),
+                "dob": FieldResult(value="26/05/1970", confidence_basis="structured_verbatim", reason="regex"),
+                "initials": FieldResult(value="AO", confidence_basis="structured_verbatim", reason=""),
+                "mrn": FieldResult(value="9990001", confidence_basis="structured_verbatim", reason=""),
+                "nhs_number": FieldResult(value="9990000001", confidence_basis="freeform_verbatim", reason="LLM"),
+                "gender": FieldResult(value="Male", confidence_basis="structured_verbatim", reason=""),
+                "previous_cancer": FieldResult(value=None, confidence_basis="absent", reason=""),
+                "previous_cancer_site": FieldResult(value=None, confidence_basis="absent", reason=""),
             }
         }
     )
@@ -81,13 +81,13 @@ def test_excel_round_trip():
         raw_text="test",
         extractions={
             "Demographics": {
-                "dob": FieldResult(value="26/05/1970", confidence="high"),
-                "initials": FieldResult(value="AO", confidence="high"),
-                "mrn": FieldResult(value="9990001", confidence="high"),
-                "nhs_number": FieldResult(value="9990000001", confidence="high"),
-                "gender": FieldResult(value="Male", confidence="high"),
-                "previous_cancer": FieldResult(value="No", confidence="medium"),
-                "previous_cancer_site": FieldResult(value="N/A", confidence="low"),
+                "dob": FieldResult(value="26/05/1970", confidence_basis="structured_verbatim"),
+                "initials": FieldResult(value="AO", confidence_basis="structured_verbatim"),
+                "mrn": FieldResult(value="9990001", confidence_basis="structured_verbatim"),
+                "nhs_number": FieldResult(value="9990000001", confidence_basis="structured_verbatim"),
+                "gender": FieldResult(value="Male", confidence_basis="structured_verbatim"),
+                "previous_cancer": FieldResult(value="No", confidence_basis="freeform_verbatim"),
+                "previous_cancer_site": FieldResult(value="N/A", confidence_basis="freeform_inferred"),
             }
         }
     )

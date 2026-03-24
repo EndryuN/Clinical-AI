@@ -192,15 +192,20 @@ def _import_excel(file_path: str) -> list:
                 if cell_value is not None:
                     value = str(cell_value).strip()
                     meta = meta_lookup.get((patient_id, field['key']), {})
+                    cb = meta.get('confidence_basis') or meta.get('confidence', 'structured_verbatim')
+                    # Map legacy confidence string to basis if needed
+                    if cb in ('high', 'medium', 'low', 'none'):
+                        cb = {'high': 'structured_verbatim', 'medium': 'freeform_verbatim',
+                              'low': 'freeform_inferred', 'none': 'absent'}[cb]
                     group_fields[field['key']] = FieldResult(
                         value=value,
-                        confidence=meta.get('confidence', 'high'),
+                        confidence_basis=cb,
                         reason=meta.get('reason', ''),
                         source_cell=meta.get('source_cell'),
                         source_snippet=meta.get('source_snippet')
                     )
                 else:
-                    group_fields[field['key']] = FieldResult(value=None, confidence='none')
+                    group_fields[field['key']] = FieldResult(value=None, confidence_basis='absent')
             extractions[group['name']] = group_fields
 
         # Get patient identifiers from Demographics fields
@@ -299,7 +304,7 @@ def _run_extraction(patient_limit=None, concurrency=1):
             if group.get('llm_required', False):
                 for key, fr in results.items():
                     if fr.value is None:
-                        results[key] = FieldResult(value=None, confidence='none')
+                        results[key] = FieldResult(value=None, confidence_basis='absent')
             patient.extractions[group['name']] = results
         with _counter_lock:
             session.progress['regex_complete'] += 1

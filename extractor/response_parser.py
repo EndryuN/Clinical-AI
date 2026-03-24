@@ -45,7 +45,7 @@ def parse_llm_response(raw_response: str, group: dict) -> dict[str, FieldResult]
 
     data = _extract_json(raw_response)
     if data is None:
-        return {key: FieldResult(value=None, confidence="low") for key in expected_keys}
+        return {key: FieldResult(value=None, confidence_basis="absent") for key in expected_keys}
 
     results = {}
     for key in expected_keys:
@@ -71,12 +71,8 @@ def parse_llm_response(raw_response: str, group: dict) -> dict[str, FieldResult]
             if value.lower() in ('null', 'none', 'n/a', 'missing', ''):
                 value = None
 
-        original_confidence = confidence
-        confidence = _apply_confidence_overrides(value, confidence, field_types.get(key, 'string'))
-        # Add override reason if confidence was changed programmatically
-        if confidence != original_confidence and value is not None:
-            reason = f"[Override: {original_confidence}→{confidence}] {reason}"
-        if confidence == 'none':
+        if value is None:
+            confidence = 'none'
             reason = "Field not mentioned in the document"
 
         # Check for misspellings in text values
@@ -85,7 +81,12 @@ def parse_llm_response(raw_response: str, group: dict) -> dict[str, FieldResult]
             if typos:
                 reason = f"[Possible misspelling: {', '.join(typos[:3])}] {reason}"
 
-        results[key] = FieldResult(value=value, confidence=confidence, reason=reason, source_snippet=source_section)
+        # Map old confidence string to temporary basis — refined in Task 4
+        _basis_tmp = {"high": "freeform_verbatim", "medium": "freeform_verbatim",
+                      "low": "freeform_inferred", "none": "absent"}.get(confidence, "freeform_inferred")
+        results[key] = FieldResult(
+            value=value, confidence_basis=_basis_tmp, reason=reason, source_snippet=source_section
+        )
 
     return results
 

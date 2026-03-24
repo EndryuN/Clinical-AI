@@ -39,7 +39,7 @@ def regex_extract(raw_text: str, group_name: str, fields: list[dict], raw_cells:
 
     extractor = extractors.get(group_name)
     if not extractor:
-        return {f['key']: FieldResult(value=None, confidence='none') for f in fields}
+        return {f['key']: FieldResult(value=None, confidence_basis='absent') for f in fields}
 
     extracted = extractor(raw_text)
     raw_cells = raw_cells or []
@@ -62,13 +62,13 @@ def regex_extract(raw_text: str, group_name: str, fields: list[dict], raw_cells:
                         break
             results[key] = FieldResult(
                 value=value,
-                confidence='high',
+                confidence_basis='structured_verbatim',
                 reason='Extracted verbatim from document text',
                 source_cell=source_cell,
                 source_snippet=source_snippet,
             )
         else:
-            results[key] = FieldResult(value=None, confidence='none', reason='')
+            results[key] = FieldResult(value=None, confidence_basis='absent', reason='')
     return results
 
 

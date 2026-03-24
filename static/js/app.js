@@ -881,12 +881,20 @@ function initCoverageToggle(coverageMap, coveragePct, coords, coverageStats) {
         }
     }
 
+    // Store the normal and coverage image URLs for toggling
+    const previewImg = document.getElementById('preview-img');
+    const normalSrc = previewImg ? previewImg.src : '';
+    const coverageSrc = normalSrc.replace('.png', '_coverage.png');
+
     newBtn.addEventListener('click', () => {
         _coverageVisible = !_coverageVisible;
         newBtn.textContent = _coverageVisible ? 'Hide highlights' : 'Highlight unused';
         newBtn.classList.toggle('btn-warning', _coverageVisible);
         newBtn.classList.toggle('btn-outline-warning', !_coverageVisible);
-        renderCoverageOverlay(_coverageVisible, coords);
+        // Swap image between normal and coverage version
+        if (previewImg) {
+            previewImg.src = _coverageVisible ? coverageSrc : normalSrc;
+        }
     });
 }
 

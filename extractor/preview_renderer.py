@@ -85,10 +85,16 @@ def _wrap(text: str, font, max_px: int, draw: ImageDraw.ImageDraw) -> list[str]:
     return lines or ['']
 
 
-def _draw_text_block(draw, x, y, w, h, text, font, color, padding=CELL_PADDING, max_lines=None):
-    """Draw wrapped text inside a rectangle. Returns list of drawn lines."""
+def _draw_text_block(draw, x, y, w, h, text, font, color, padding=CELL_PADDING, max_lines=None,
+                     coverage_spans=None):
+    """Draw wrapped text inside a rectangle.
+
+    If coverage_spans provided, colour each character: green=used, amber=unused.
+    Returns list of drawn lines.
+    """
     if not text:
         return []
+    raw_text = text
     text = _sanitize(text)
     max_w = w - padding * 2
     lines = _wrap(text, font, max_w, draw)
@@ -100,9 +106,36 @@ def _draw_text_block(draw, x, y, w, h, text, font, color, padding=CELL_PADDING, 
         lines = lines[:max_lines]
         if lines[-1]:
             lines[-1] = lines[-1][:-1] + '…'
+
+    # Build per-character used/unused map from coverage spans
+    char_used = None
+    if coverage_spans:
+        char_used = [False] * len(raw_text)
+        for span in coverage_spans:
+            if span.get("used"):
+                for ci in range(span["start"], min(span["end"], len(raw_text))):
+                    char_used[ci] = True
+
     ty = y + padding
+    char_offset = 0  # track position in original text
     for line in lines:
-        draw.text((x + padding, ty), line, font=font, fill=color)
+        if char_used and line:
+            # Draw character by character with colour
+            tx = x + padding
+            for ch in line:
+                # Find this char in the original text
+                while char_offset < len(raw_text) and raw_text[char_offset] in ('\n', '\r'):
+                    char_offset += 1
+                is_used = char_used[char_offset] if char_offset < len(char_used) else False
+                ch_color = (100, 200, 100) if is_used else (255, 160, 50)  # green / amber
+                draw.text((tx, ty), ch, font=font, fill=ch_color)
+                tx += draw.textlength(ch, font=font)
+                char_offset += 1
+            # Skip the space/newline between lines
+            char_offset += 1
+        else:
+            draw.text((x + padding, ty), line, font=font, fill=color)
+            char_offset += len(line) + 1
         ty += line_h
     return lines
 
@@ -316,4 +349,56 @@ def render_patient_preview(patient: PatientBlock, out_dir: str) -> dict:
     with open(json_path, 'w') as f:
         json.dump(coords, f)
 
+    # --- Generate coverage version if coverage data available ---
+    if patient.coverage_map:
+        _render_coverage_version(patient, out_dir, file_id, row_map, coords)
+
     return coords
+
+
+def _render_coverage_version(patient, out_dir, file_id, row_map, coords):
+    """Render a second PNG with green=used, amber=unused text colouring."""
+    from PIL import Image as _Img, ImageDraw as _Draw
+
+    def cell(r, c):
+        return row_map.get(r, {}).get(c, '').strip()
+
+    font_normal = _font(11)
+    font_bold = _font(12)
+    font_header = _font(11)
+
+    # Rebuild the image from coords (we know the total height from max y+h)
+    max_y = max(c['y'] + c['h'] for c in coords.values())
+    img = _Img.new('RGB', (IMG_WIDTH, max_y), _CONTENT_BG)
+    draw = _Draw.Draw(img)
+
+    # Redraw section headers (not coverage-tracked)
+    for key, coord in coords.items():
+        row_idx = int(key.split(',')[0])
+        col_idx = int(key.split(',')[1])
+
+        # Header rows: redraw with original styling
+        if row_idx in (0, 2, 4, 6):
+            draw.rectangle([coord['x'], coord['y'], coord['x'] + coord['w'] - 1,
+                           coord['y'] + coord['h'] - 1], fill=_HEADER_BG, outline=_BORDER)
+            text = cell(row_idx, col_idx)
+            if text:
+                draw.text((coord['x'] + CELL_PADDING, coord['y'] + 5),
+                         _sanitize(text), font=font_header, fill=_HEADER_TEXT)
+        elif row_idx == -1:
+            # Meeting date banner
+            draw.rectangle([coord['x'], coord['y'], coord['x'] + coord['w'] - 1,
+                           coord['y'] + coord['h'] - 1], fill=_MEETING_BG, outline=_BORDER)
+            meeting_text = f"MDT Meeting: {patient.mdt_date}" if patient.mdt_date else "MDT Meeting Date: —"
+            draw.text((CELL_PADDING, coord['y'] + 6), meeting_text, font=font_bold, fill=_MEETING_TEXT)
+        else:
+            # Content cell — draw with coverage colouring
+            draw.rectangle([coord['x'], coord['y'], coord['x'] + coord['w'] - 1,
+                           coord['y'] + coord['h'] - 1], fill=_CONTENT_BG, outline=_BORDER)
+            text = cell(row_idx, col_idx)
+            spans = patient.coverage_map.get(key, [])
+            _draw_text_block(draw, coord['x'], coord['y'], coord['w'], coord['h'],
+                           text, font_normal, _CONTENT_TEXT, coverage_spans=spans if spans else None)
+
+    cov_path = os.path.join(out_dir, f'{file_id}_coverage.png')
+    img.save(cov_path, 'PNG')

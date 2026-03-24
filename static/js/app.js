@@ -422,17 +422,17 @@ function selectPatient(patientId) {
                         previewImg.src = preview.image_url;
                         previewImg.style.display = 'block';
                         if (previewPlaceholder) previewPlaceholder.style.display = 'none';
-                        initCoverageToggle(preview.coverage_map, preview.coverage_pct, preview.coords);
+                        initCoverageToggle(preview.coverage_map, preview.coverage_pct, preview.coords, preview.coverage_stats);
                     } else {
                         if (previewImg) previewImg.style.display = 'none';
                         if (previewPlaceholder) previewPlaceholder.style.display = 'block';
-                        initCoverageToggle(null, null, null);
+                        initCoverageToggle(null, null, null, null);
                     }
                 })
                 .catch(() => {
                     if (previewImg) previewImg.style.display = 'none';
                     if (previewPlaceholder) previewPlaceholder.style.display = 'block';
-                    initCoverageToggle(null, null, null);
+                    initCoverageToggle(null, null, null, null);
                 });
 
             // Store extractions for re-rendering on filter change
@@ -812,59 +812,67 @@ function linkSourceFile(file) {
         });
 }
 
-// ── Coverage toggle ──
+// ── Coverage stats + unused highlight ──
 let _coverageVisible = false;
 let _coverageMap = null;
-let _coveragePct = null;
 
-function initCoverageToggle(coverageMap, coveragePct, coords) {
+function initCoverageToggle(coverageMap, coveragePct, coords, coverageStats) {
     _coverageMap = coverageMap;
-    _coveragePct = coveragePct;
     _coverageVisible = false;
 
     const container = document.getElementById('coverage-toggle-container');
     const btn = document.getElementById('coverage-toggle-btn');
-    const badge = document.getElementById('coverage-badge');
+    const verbatimBadge = document.getElementById('cov-verbatim');
+    const inferredBadge = document.getElementById('cov-inferred');
+    const unusedBadge = document.getElementById('cov-unused');
 
     if (!container || !btn) return;
 
-    // Reset button state
-    btn.textContent = 'Show unused text';
+    // Reset
+    btn.textContent = 'Highlight unused';
     btn.classList.add('btn-outline-warning');
     btn.classList.remove('btn-warning');
     btn.disabled = false;
-    btn.title = '';
-    if (badge) {
-        badge.classList.remove('d-none');
-        badge.textContent = '';
-    }
 
-    // Remove old event listener by cloning
+    // Remove old listener by cloning
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
 
-    // Remove any existing overlay
+    // Remove existing overlay
     const existing = document.getElementById('coverage-svg-overlay');
     if (existing) existing.remove();
 
     if (!coverageMap || Object.keys(coverageMap).length === 0) {
         container.classList.remove('d-none');
         newBtn.disabled = true;
-        newBtn.title = 'Coverage data not available (legacy file)';
-        if (badge) badge.classList.add('d-none');
+        newBtn.title = 'Coverage data not available';
+        if (verbatimBadge) verbatimBadge.classList.add('d-none');
+        if (inferredBadge) inferredBadge.classList.add('d-none');
+        if (unusedBadge) unusedBadge.classList.add('d-none');
         return;
     }
 
     container.classList.remove('d-none');
-    if (coveragePct !== null && coveragePct !== undefined) {
-        badge.textContent = coveragePct + '% covered';
-    } else {
-        if (badge) badge.classList.add('d-none');
+
+    // Populate 3 stat badges
+    if (coverageStats) {
+        if (verbatimBadge) {
+            verbatimBadge.textContent = coverageStats.verbatim_pct + '% verbatim';
+            verbatimBadge.classList.remove('d-none');
+        }
+        if (inferredBadge) {
+            inferredBadge.textContent = coverageStats.inferred_fields + ' inferred';
+            inferredBadge.classList.remove('d-none');
+        }
+        if (unusedBadge) {
+            unusedBadge.textContent = coverageStats.unused_pct + '% unused';
+            unusedBadge.classList.remove('d-none');
+        }
     }
 
     newBtn.addEventListener('click', () => {
         _coverageVisible = !_coverageVisible;
-        newBtn.textContent = _coverageVisible ? 'Hide unused text' : 'Show unused text';
+        newBtn.textContent = _coverageVisible ? 'Hide highlights' : 'Highlight unused';
         newBtn.classList.toggle('btn-warning', _coverageVisible);
         newBtn.classList.toggle('btn-outline-warning', !_coverageVisible);
         renderCoverageOverlay(_coverageVisible, coords);
@@ -893,21 +901,23 @@ function renderCoverageOverlay(show, coords) {
         if (!spans || spans.length === 0) continue;
         const cellCoord = coords[cellKey];
         if (!cellCoord) continue;
+
         const unusedLen = spans.filter(s => !s.used).reduce((a, s) => a + (s.end - s.start), 0);
         const totalLen = spans.reduce((a, s) => a + (s.end - s.start), 0);
         if (totalLen === 0 || unusedLen === 0) continue;
 
         const ratio = unusedLen / totalLen;
-        const opacity = Math.min(0.6, ratio * 0.8);
+        const opacity = Math.min(0.5, ratio * 0.6);
 
         const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         rect.setAttribute('x', cellCoord.x * scaleX);
         rect.setAttribute('y', cellCoord.y * scaleY);
         rect.setAttribute('width', cellCoord.w * scaleX);
         rect.setAttribute('height', cellCoord.h * scaleY);
-        rect.setAttribute('fill', 'rgba(255,165,0,' + opacity + ')');
-        rect.setAttribute('stroke', 'rgba(255,140,0,0.6)');
-        rect.setAttribute('stroke-width', '1');
+        rect.setAttribute('fill', 'rgba(255,140,0,' + opacity + ')');
+        rect.setAttribute('stroke', 'rgba(255,120,0,0.7)');
+        rect.setAttribute('stroke-width', '2');
+        rect.setAttribute('stroke-dasharray', '4,2');
         svg.appendChild(rect);
     }
 

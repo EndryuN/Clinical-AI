@@ -619,6 +619,7 @@ def get_patient(patient_id):
         "extractions": extractions,
         "coverage_map": patient.coverage_map,
         "coverage_pct": patient.coverage_pct,
+        "coverage_stats": patient.coverage_stats,
     })
 
 
@@ -646,6 +647,7 @@ def patient_preview(patient_id):
         "coords": coords,
         "coverage_map": patient.coverage_map,
         "coverage_pct": patient.coverage_pct,
+        "coverage_stats": patient.coverage_stats,
     })
 
 

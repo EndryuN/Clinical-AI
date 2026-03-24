@@ -44,8 +44,9 @@ class PatientBlock:
     raw_text: str = ""
     extractions: dict = field(default_factory=dict)
     raw_cells: list = field(default_factory=list)
-    coverage_map: dict = field(default_factory=dict)   # {"{row},{col}": [{"start","end","used"}]}
+    coverage_map: dict = field(default_factory=dict)   # {"{row},{col}": [{"start","end","used","type"}]}
     coverage_pct: Optional[float] = None
+    coverage_stats: Optional[dict] = None              # {verbatim_pct, inferred_fields, unused_pct, total_chars}
 
 
 @dataclass

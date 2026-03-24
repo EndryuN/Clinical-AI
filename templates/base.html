@@ -14,7 +14,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary">
         <div class="container-fluid">
             <a class="navbar-brand" href="/">&#x1f3e5; MDT Extractor</a>
-            <div class="navbar-nav ms-auto">
+            <div class="navbar-nav ms-auto align-items-center">
                 {% if session_active %}
                 <a class="nav-link" href="/process">Process</a>
                 <a class="nav-link" href="/review">Review</a>
@@ -22,6 +22,7 @@
                 <a class="btn btn-success btn-sm ms-2" href="/export">Export Excel</a>
                 <button class="btn btn-outline-danger btn-sm ms-2" onclick="if(confirm('Wipe all data and start over?')){fetch('/reset',{method:'POST'}).then(()=>window.location='/')}">Reset</button>
                 {% endif %}
+                <button id="theme-toggle" class="ms-2" onclick="toggleTheme()" title="Toggle light/dark mode">&#x263E;</button>
             </div>
         </div>
     </nav>
@@ -33,6 +34,27 @@
     <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+    // Theme toggle — persists in localStorage
+    function toggleTheme() {
+        const html = document.documentElement;
+        const current = html.getAttribute('data-bs-theme');
+        const next = current === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-bs-theme', next);
+        localStorage.setItem('theme', next);
+        updateThemeIcon(next);
+    }
+    function updateThemeIcon(theme) {
+        const btn = document.getElementById('theme-toggle');
+        if (btn) btn.innerHTML = theme === 'dark' ? '&#x263E;' : '&#x2600;';
+    }
+    // Apply saved theme on load
+    (function() {
+        const saved = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-bs-theme', saved);
+        updateThemeIcon(saved);
+    })();
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

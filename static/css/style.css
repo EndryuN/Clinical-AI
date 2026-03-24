@@ -1,141 +1,232 @@
-/* static/css/style.css */
+/* static/css/style.css — MDT Data Extractor */
 
-body {
-    background-color: #0d1117;
-    color: #c9d1d9;
+/* ── Theme Variables ── */
+:root, [data-bs-theme="dark"] {
+    --app-bg: #0d1117;
+    --app-surface: #161b22;
+    --app-border: #30363d;
+    --app-text: #c9d1d9;
+    --app-text-muted: #8b949e;
+    --app-accent: #58a6ff;
+    --app-hover: #1c2230;
+    --app-scrollbar-track: #0d1117;
+    --app-scrollbar-thumb: #30363d;
+    --app-card-bg: #0d1117;
+    --app-input-bg: #0d1117;
+    --app-nav-bg: #161b22;
 }
 
-/* Patient Sidebar Items */
+[data-bs-theme="light"] {
+    --app-bg: #ffffff;
+    --app-surface: #f6f8fa;
+    --app-border: #d0d7de;
+    --app-text: #1f2328;
+    --app-text-muted: #656d76;
+    --app-accent: #0969da;
+    --app-hover: #eef1f5;
+    --app-scrollbar-track: #f6f8fa;
+    --app-scrollbar-thumb: #d0d7de;
+    --app-card-bg: #ffffff;
+    --app-input-bg: #ffffff;
+    --app-nav-bg: #f6f8fa;
+}
+
+body {
+    background-color: var(--app-bg);
+    color: var(--app-text);
+}
+
+/* ── Patient Sidebar ── */
 .patient-item {
     background: transparent;
     transition: background 0.15s;
     border-radius: 6px;
 }
 .patient-item:hover {
-    background: #161b22;
+    background: var(--app-surface);
 }
 .patient-item.active {
     background: rgba(31, 111, 235, 0.1);
 }
 
-/* Upload Zone */
+/* ── Upload Zone ── */
 #upload-zone {
-    background: #161b22;
+    background: var(--app-surface);
     transition: border-color 0.2s, background 0.2s;
 }
 #upload-zone:hover {
-    border-color: #58a6ff !important;
-    background: #1c2230;
+    border-color: var(--app-accent) !important;
+    background: var(--app-hover);
 }
 
-/* Navigation Tabs */
+/* ── Navigation Tabs ── */
 .nav-tabs .nav-link {
-    color: #8b949e;
+    color: var(--app-text-muted);
     border: none;
     padding: 8px 16px;
     font-size: 13px;
     border-bottom: 2px solid transparent;
 }
 .nav-tabs .nav-link:hover {
-    color: #c9d1d9;
-    border-bottom-color: #30363d;
+    color: var(--app-text);
+    border-bottom-color: var(--app-border);
 }
 .nav-tabs .nav-link.active {
-    color: #58a6ff;
-    border-bottom: 2px solid #58a6ff;
+    color: var(--app-accent);
+    border-bottom: 2px solid var(--app-accent);
     background: transparent;
 }
 
-/* Tables */
+/* ── Tables ── */
 .table-dark {
     --bs-table-bg: transparent;
+    --bs-table-color: var(--app-text);
+    --bs-table-border-color: var(--app-border);
 }
 .table-dark td, .table-dark th {
-    border-color: #21262d;
+    border-color: var(--app-border);
     vertical-align: middle;
 }
-
-/* Progress Bar */
-.progress {
-    background-color: #21262d;
+[data-bs-theme="light"] .table-dark {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--app-text);
+    --bs-table-border-color: var(--app-border);
+    --bs-table-hover-bg: var(--app-hover);
 }
 
-/* Pre / source text */
+/* ── Progress Bar ── */
+.progress {
+    background-color: var(--app-border);
+}
+
+/* ── Pre / Source Text ── */
 pre {
     font-size: 12px;
     line-height: 1.6;
-    color: #8b949e;
+    color: var(--app-text-muted);
 }
 
-/* Cards */
+/* ── Cards ── */
 .card {
-    border-color: #30363d;
+    border-color: var(--app-border);
+    background-color: var(--app-card-bg);
 }
 
-/* Form controls in dark context */
+/* ── Form Controls ── */
 .form-control.bg-dark,
 .form-select.bg-dark {
-    border-color: #30363d;
-    color: #c9d1d9;
+    border-color: var(--app-border);
+    color: var(--app-text);
+    background-color: var(--app-input-bg) !important;
 }
 .form-control.bg-dark:focus,
 .form-select.bg-dark:focus {
-    border-color: #58a6ff;
+    border-color: var(--app-accent);
     box-shadow: 0 0 0 0.2rem rgba(88, 166, 255, 0.15);
-    background-color: #0d1117;
-    color: #c9d1d9;
+    background-color: var(--app-input-bg) !important;
+    color: var(--app-text);
 }
 
-/* Navbar brand */
+/* Light theme form overrides */
+[data-bs-theme="light"] .form-control.bg-dark,
+[data-bs-theme="light"] .form-select.bg-dark {
+    background-color: var(--app-input-bg) !important;
+    color: var(--app-text) !important;
+    border-color: var(--app-border) !important;
+}
+
+/* ── Navbar ── */
 .navbar-brand {
     font-weight: 600;
     font-size: 1.1rem;
 }
+[data-bs-theme="light"] .navbar {
+    background-color: var(--app-nav-bg) !important;
+}
+[data-bs-theme="light"] .navbar .nav-link {
+    color: var(--app-text-muted) !important;
+}
+[data-bs-theme="light"] .navbar .nav-link:hover {
+    color: var(--app-text) !important;
+}
+[data-bs-theme="light"] .navbar-brand {
+    color: var(--app-text) !important;
+}
 
-/* Completed log entries */
+/* ── Completed Log ── */
 #completed-log > div {
-    border-bottom: 1px solid #21262d;
+    border-bottom: 1px solid var(--app-border);
 }
 #completed-log > div:last-child {
     border-bottom: none;
 }
 
-/* Badges */
+/* ── Badges ── */
 .badge {
     font-weight: 500;
 }
 
-/* Scrollbar styling for WebKit */
+/* ── Scrollbar (WebKit) ── */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
 ::-webkit-scrollbar-track {
-    background: #0d1117;
+    background: var(--app-scrollbar-track);
 }
 ::-webkit-scrollbar-thumb {
-    background: #30363d;
+    background: var(--app-scrollbar-thumb);
     border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
     background: #484f58;
 }
 
-/* MEDIUM/INFERRED fields use red — same visual urgency as LOW */
+/* ── Confidence Rows ── */
 .inferred-row {
     background-color: rgba(220, 53, 69, 0.05) !important;
 }
 .inferred-input {
     border-color: #dc3545 !important;
 }
-/* PENDING rows (not yet extracted in two-phase pipeline) */
+
+/* ── Pending Rows ── */
 .pending-row td {
     color: #555 !important;
     font-style: italic;
 }
-/* Source panel sizing */
+
+/* ── Source Panel ── */
 #source-panel {
     min-height: 250px;
     resize: vertical;
     overflow-y: auto;
+    border-color: var(--app-border) !important;
+}
+
+/* ── Theme Toggle Button ── */
+#theme-toggle {
+    background: transparent;
+    border: 1px solid var(--app-border);
+    color: var(--app-text-muted);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+}
+#theme-toggle:hover {
+    color: var(--app-text);
+    border-color: var(--app-text-muted);
+}
+
+/* ── Light theme sidebar/panel overrides ── */
+[data-bs-theme="light"] .border-secondary {
+    border-color: var(--app-border) !important;
+}
+[data-bs-theme="light"] .bg-dark {
+    background-color: var(--app-surface) !important;
+}
+[data-bs-theme="light"] .text-light {
+    color: var(--app-text) !important;
 }

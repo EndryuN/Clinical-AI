@@ -40,6 +40,22 @@ def _font(size: int = 11) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default(size=size)
 
 
+def _sanitize(text: str) -> str:
+    """Replace Unicode characters that Pillow's default font can't render."""
+    return (text
+            .replace('\u2013', '-')   # en-dash → hyphen
+            .replace('\u2014', '-')   # em-dash → hyphen
+            .replace('\u2018', "'")   # left single quote
+            .replace('\u2019', "'")   # right single quote
+            .replace('\u201c', '"')   # left double quote
+            .replace('\u201d', '"')   # right double quote
+            .replace('\u2026', '...')  # ellipsis
+            .replace('\u00a0', ' ')   # non-breaking space
+            .replace('\u2022', '-')   # bullet
+            .replace('\ufffd', '?')   # replacement character
+            )
+
+
 def _wrap(text: str, font, max_px: int, draw: ImageDraw.ImageDraw) -> list[str]:
     """Wrap text into lines that fit within max_px pixels wide."""
     if not text:
@@ -73,6 +89,7 @@ def _draw_text_block(draw, x, y, w, h, text, font, color, padding=CELL_PADDING, 
     """Draw wrapped text inside a rectangle. Returns list of drawn lines."""
     if not text:
         return []
+    text = _sanitize(text)
     max_w = w - padding * 2
     lines = _wrap(text, font, max_w, draw)
     bb = draw.textbbox((0, 0), 'Ag', font=font)
@@ -94,6 +111,7 @@ def _content_height(text: str, width: int, font, draw, padding=CELL_PADDING, min
     """Calculate needed height for text content."""
     if not text:
         return min_h
+    text = _sanitize(text)
     max_w = width - padding * 2
     lines = _wrap(text, font, max_w, draw)
     bb = draw.textbbox((0, 0), 'Ag', font=font)
@@ -117,13 +135,13 @@ def render_patient_preview(patient: PatientBlock, out_dir: str) -> dict:
     def cell(r, c):
         return row_map.get(r, {}).get(c, '').strip()
 
-    # Extract section content from raw_cells
+    # Extract section content from raw_cells (sanitize all text for Pillow rendering)
     # Section headers from row 0, 2, 4, 6
-    patient_details_label = cell(0, 0) or "Patient Details"
-    cancer_dates_label = cell(0, 1) if cell(0, 1) and 'target' in cell(0, 1).lower() else "Cancer Target Dates"
-    staging_label = cell(2, 0) or "Staging & Diagnosis(g)"
-    clinical_label = cell(4, 0) or "Clinical Details(f):"
-    mdt_label = cell(6, 0) or "MDT Outcome(h)"
+    patient_details_label = _sanitize(cell(0, 0) or "Patient Details")
+    cancer_dates_label = _sanitize(cell(0, 1) if cell(0, 1) and 'target' in cell(0, 1).lower() else "Cancer Target Dates")
+    staging_label = _sanitize(cell(2, 0) or "Staging & Diagnosis(g)")
+    clinical_label = _sanitize(cell(4, 0) or "Clinical Details(f):")
+    mdt_label = _sanitize(cell(6, 0) or "MDT Outcome(h)")
 
     # Section content from rows 1, 3, 5, 7
     patient_details_text = cell(1, 0)

@@ -7,8 +7,9 @@ Coverage tracks three categories of freeform text:
 """
 from models import PatientBlock
 
-# Freeform rows: clinical details (4,5) and MDT outcome (6,7)
-_FREEFORM_ROWS = {4, 5, 6, 7}
+# Freeform content rows (not headers): clinical details text (5) and MDT outcome text (7)
+# Rows 4 and 6 are section headers ("Clinical Details(f):", "MDT Outcome(h)")
+_FREEFORM_ROWS = {5, 7}
 
 
 def _merge_spans(spans: list[dict]) -> list[dict]:

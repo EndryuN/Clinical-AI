@@ -1,16 +1,24 @@
 import json
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.comments import Comment
 from config import get_all_fields, get_groups
 
 
+# Confidence basis → (fill hex, font italic, font colour)
+_BASIS_STYLES = {
+    "structured_verbatim": ("C6EFCE", False, None),      # green
+    "freeform_verbatim":   ("FFEB9C", True,  "9C6500"),  # orange + italic
+    "freeform_inferred":   ("FFC7CE", False, "9C0006"),  # red
+    "edited":              ("D9D9D9", False, None),       # grey
+    "absent":              (None,     False, None),       # no fill
+}
+
+
 def _get_group_colors() -> dict:
-    """Build a mapping of field key → hex color from the schema groups."""
     colors = {}
     for group in get_groups():
-        color = group.get('color', '#D9D9D9')
-        # Remove the # prefix for openpyxl
-        hex_color = color.lstrip('#')
+        hex_color = group.get('color', '#D9D9D9').lstrip('#')
         for field in group['fields']:
             colors[field['key']] = hex_color
     return colors
@@ -23,88 +31,134 @@ def write_excel(patients: list, output_path: str, source_name: str = ""):
 
     all_fields = get_all_fields()
     group_colors = _get_group_colors()
+    OFFSET = 1  # unique_id occupies column 1; all schema fields shift right by 1
 
-    # Header row with colour coding
+    # Column 1: unique_id header
+    uid_header = ws.cell(row=1, column=1, value="unique_id")
+    uid_header.font = Font(bold=True, size=9)
+
+    # Field headers (shifted by OFFSET)
     header_font = Font(bold=True, size=9)
     for field in all_fields:
-        col = field['excel_column']
+        col = field['excel_column'] + OFFSET
         cell = ws.cell(row=1, column=col, value=field['excel_header'])
         cell.font = header_font
         cell.alignment = Alignment(wrap_text=True, vertical='top')
-
         hex_color = group_colors.get(field['key'], 'D9D9D9')
         cell.fill = PatternFill(start_color=hex_color, end_color=hex_color, fill_type='solid')
 
-    # Cell styles for confidence levels
-    inferred_fill = PatternFill(start_color='D4EDFC', end_color='D4EDFC', fill_type='solid')  # light blue
-    inferred_font = Font(italic=True, color='0066AA')
-    low_fill = PatternFill(start_color='FCE4E4', end_color='FCE4E4', fill_type='solid')  # light red
-    low_font = Font(color='CC0000')
-
     # Patient data rows
     for row_idx, patient in enumerate(patients, start=2):
+        ws.cell(row=row_idx, column=1, value=patient.unique_id or patient.id)
+
         for group_name, fields in patient.extractions.items():
-            for field_key, field_result in fields.items():
+            for field_key, fr in fields.items():
                 col = _get_column(all_fields, field_key)
-                if col and field_result.value is not None:
-                    cell = ws.cell(row=row_idx, column=col, value=field_result.value)
+                if col is None:
+                    continue
+                col += OFFSET
+                if fr.value is not None:
+                    cell = ws.cell(row=row_idx, column=col, value=fr.value)
                     field_def = _get_field_def(all_fields, field_key)
                     if field_def and field_def['type'] == 'date':
                         cell.number_format = 'DD/MM/YYYY'
 
-                    # Highlight inferred values
-                    reason = (field_result.reason or '').lower()
-                    is_inferred = field_result.confidence == 'medium' or 'infer' in reason
-                    if is_inferred:
-                        cell.fill = inferred_fill
-                        cell.font = inferred_font
-                    elif field_result.confidence == 'low':
-                        cell.fill = low_fill
-                        cell.font = low_font
+                    fill_hex, italic, font_color = _BASIS_STYLES.get(
+                        fr.confidence_basis, (None, False, None)
+                    )
+                    if fill_hex:
+                        cell.fill = PatternFill(
+                            start_color=fill_hex, end_color=fill_hex, fill_type='solid'
+                        )
+                    if italic or font_color:
+                        cell.font = Font(
+                            italic=italic,
+                            color=font_color or "000000"
+                        )
+                    # Cell comment for edited originals
+                    if fr.edited and fr.original_value is not None:
+                        cell.comment = Comment(
+                            f"Original: {fr.original_value}", "MDT Extractor"
+                        )
 
-    # Add legend below data
+    # Legend
     legend_row = ws.max_row + 2
     ws.cell(row=legend_row, column=1, value="Legend:").font = Font(bold=True)
-    c1 = ws.cell(row=legend_row + 1, column=1, value="Inferred value (derived from context)")
-    c1.fill = inferred_fill
-    c1.font = inferred_font
-    c2 = ws.cell(row=legend_row + 2, column=1, value="Low confidence (uncertain extraction)")
-    c2.fill = low_fill
-    c2.font = low_font
-    ws.cell(row=legend_row + 3, column=1, value="No highlight = high confidence (explicitly stated)")
+    for i, (basis, label) in enumerate([
+        ("structured_verbatim", "Green — extracted from structured field (high confidence)"),
+        ("freeform_verbatim",   "Orange — found verbatim in freeform text (medium confidence)"),
+        ("freeform_inferred",   "Red — inferred by LLM, not verbatim (low confidence)"),
+        ("edited",              "Grey — manually edited by clinician"),
+    ], start=1):
+        fill_hex, italic, font_color = _BASIS_STYLES[basis]
+        c = ws.cell(row=legend_row + i, column=1, value=label)
+        if fill_hex:
+            c.fill = PatternFill(start_color=fill_hex, end_color=fill_hex, fill_type='solid')
+        if italic or font_color:
+            c.font = Font(italic=italic, color=font_color or "000000")
 
-    # Auto-width columns (capped at 30)
-    for col_idx in range(1, 89):
+    # Auto-width (cap at 30)
+    for col_idx in range(1, len(all_fields) + OFFSET + 1):
         max_len = 0
-        for row in ws.iter_rows(min_col=col_idx, max_col=col_idx, min_row=1, max_row=min(ws.max_row, 5)):
+        for row in ws.iter_rows(
+            min_col=col_idx, max_col=col_idx, min_row=1, max_row=min(ws.max_row, 5)
+        ):
             for cell in row:
                 if cell.value:
                     max_len = max(max_len, len(str(cell.value)))
-        ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = min(max_len + 2, 30)
+        ws.column_dimensions[
+            ws.cell(row=1, column=col_idx).column_letter
+        ].width = min(max_len + 2, 30)
 
-    # Hidden Metadata sheet — stores confidence + reasoning for round-trip fidelity
+    # ── Metadata sheet ──
     ws_meta = wb.create_sheet("Metadata")
     ws_meta.sheet_state = 'hidden'
-    # Row 1: GLOBAL METADATA (e.g. source file name for previews)
     ws_meta.append(["SOURCE_FILE", source_name])
-    # Row 2: Headers
-    ws_meta.append(["patient_id", "field_key", "confidence", "reason", "source_cell", "source_snippet"])
-    for idx, patient in enumerate(patients):
-        # Use MRN as patient_id to match the identifier _import_excel reconstructs.
-        demo = patient.extractions.get("Demographics", {})
-        mrn_fr = demo.get("mrn")
-        meta_pid = (mrn_fr.value if mrn_fr and mrn_fr.value else None) or f"patient_{idx + 1:03d}"
+    META_HEADERS = [
+        "unique_id", "field_key", "confidence_basis", "reason",
+        "source_cell_row", "source_cell_col", "source_snippet",
+        "edited", "original_value", "coverage_pct"
+    ]
+    ws_meta.append(META_HEADERS)
+
+    for patient in patients:
+        pid = patient.unique_id or patient.id
         for group_name, fields in patient.extractions.items():
             for field_key, fr in fields.items():
-                source_cell_json = json.dumps(fr.source_cell) if fr.source_cell else None
+                sc_row = fr.source_cell['row'] if fr.source_cell else None
+                sc_col = fr.source_cell['col'] if fr.source_cell else None
+                snippet = (fr.source_snippet or '')[:200]
                 ws_meta.append([
-                    meta_pid,
+                    pid,
                     field_key,
-                    fr.confidence or 'none',
+                    fr.confidence_basis,
                     fr.reason or '',
-                    source_cell_json,
-                    fr.source_snippet or ''
+                    sc_row,
+                    sc_col,
+                    snippet,
+                    str(fr.edited).lower(),
+                    fr.original_value or '',
+                    patient.coverage_pct,
                 ])
+
+    # ── RawCells sheet ──
+    ws_rc = wb.create_sheet("RawCells")
+    ws_rc.sheet_state = 'hidden'
+    ws_rc.append(["unique_id", "row", "col", "text", "coverage_json"])
+
+    for patient in patients:
+        pid = patient.unique_id or patient.id
+        for cell in patient.raw_cells:
+            r, c_idx = cell['row'], cell['col']
+            cell_key = f"{r},{c_idx}"
+            spans = patient.coverage_map.get(cell_key, [])
+            ws_rc.append([
+                pid,
+                r,
+                c_idx,
+                cell.get('text', ''),
+                json.dumps(spans),
+            ])
 
     wb.save(output_path)
 

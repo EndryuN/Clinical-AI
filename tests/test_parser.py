@@ -1,5 +1,5 @@
 from unittest.mock import MagicMock
-from parser.docx_parser import _table_to_cells
+from parser.docx_parser import _table_to_cells, _extract_gender
 
 def _make_fake_table(rows_data):
     """rows_data: list of list of str — row × col cell text."""
@@ -33,3 +33,16 @@ def test_table_to_cells_strips_whitespace():
     cells = _table_to_cells(table)
     assert cells[0]["text"] == "spaced"
     assert cells[1]["text"] == "tabbed"
+
+
+def test_extract_gender_from_demographics_cell():
+    cell = "Hospital Number: 001\nNHS Number: 001\nAlice Test\nFemale (e) DOB: 01/01/1980"
+    assert _extract_gender(cell) == "Female"
+
+def test_extract_gender_male():
+    cell = "Hospital Number: 001\nNHS Number: 001\nBob Jones\nMale (e) DOB: 05/03/1972"
+    assert _extract_gender(cell) == "Male"
+
+def test_extract_gender_missing_returns_empty():
+    cell = "Hospital Number: 001\nNHS Number: 001\nBob Jones\nDOB: 05/03/1972"
+    assert _extract_gender(cell) == ""

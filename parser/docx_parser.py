@@ -36,6 +36,7 @@ from models import PatientBlock, CellRef
 
 _NHS_RE = re.compile(r'NHS Number:\s*([\d\s()\w]+?)(?:\n|$)', re.IGNORECASE)
 _HOSPITAL_RE = re.compile(r'Hospital Number:\s*(\S+)', re.IGNORECASE)
+_GENDER_RE = re.compile(r'\b(Male|Female)\b', re.IGNORECASE)
 # Name may appear as:
 #   "AIDEN O'CONNOR(b)"          – all-caps with trailing annotation
 #   "Erin Hall"                   – mixed-case after hospital/NHS lines
@@ -99,6 +100,12 @@ def _extract_nhs(details_text: str) -> str:
     # Strip annotation markers and whitespace
     digits = re.sub(r'[^\d]', '', raw)
     return digits
+
+
+def _extract_gender(details_text: str) -> str:
+    """Return 'Male', 'Female', or '' if not found."""
+    m = _GENDER_RE.search(details_text)
+    return m.group(1).capitalize() if m else ""
 
 
 def _table_to_text(table) -> str:
@@ -220,6 +227,8 @@ def parse_docx(file_path: str) -> list[PatientBlock]:
             id=patient_id,
             initials=_initials(name) if name else "",
             nhs_number=nhs,
+            gender=_extract_gender(details_cell),
+            mdt_date=mdt_date,
             raw_text=raw_text,
             raw_cells=raw_cells,
         ))

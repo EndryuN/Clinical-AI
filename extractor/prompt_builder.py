@@ -22,7 +22,7 @@ IMPORTANT RULES:
 For each field, provide:
 - "value": the extracted value, or null if not mentioned in the text
 - "confidence": one of "high", "medium", or "low"
-- "reason": a brief explanation (1 sentence) of WHY you assigned this confidence level
+- "reason": a brief explanation (1 sentence) of WHY you assigned this confidence level.{g049_reason_rule}
 - "source_section": annotation marker where the value was found, e.g. "(h)", or null
 
 Confidence levels:
@@ -34,6 +34,8 @@ Confidence levels:
 {{
 {json_example}
 }}"""
+
+_G049_REASON_RULE = """ If you used the G049 Clinical Reference below to classify or interpret a value, you MUST start your reason with "[G049]" and cite the specific definition (e.g. "[G049] Matched pT3b: 1-5mm beyond muscularis propria"). If you did NOT use the reference, do not mention G049."""
 
 def build_prompt(patient_text: str, group: dict) -> tuple[str, str]:
     """Build system and user prompts for a specific schema group.
@@ -49,11 +51,14 @@ def build_prompt(patient_text: str, group: dict) -> tuple[str, str]:
 
     g049_context = get_context_for_group(group['name'])
     g049_section = ""
+    g049_reason_rule = ""
     if g049_context:
         g049_section = f"## Clinical Reference (G049 RCPath)\n{g049_context}\n\n"
+        g049_reason_rule = _G049_REASON_RULE
 
     system_prompt = _SYSTEM_TEMPLATE.format(
         g049_section=g049_section,
+        g049_reason_rule=g049_reason_rule,
         json_example=json_example,
     )
     user_prompt = (

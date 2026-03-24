@@ -28,7 +28,10 @@
 
         <div id="progress-section" class="d-none">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h4>Extracting...</h4>
+                <div>
+                    <h4 class="mb-0">Extracting...</h4>
+                    <p class="text-muted small mb-0">Model: <span id="active-model">—</span></p>
+                </div>
                 <button class="btn btn-outline-danger btn-sm" onclick="stopExtraction()">
                     &#x25a0; Stop
                 </button>

@@ -49,3 +49,37 @@ def test_regex_extract_unmatched_field_has_none_value():
     results = regex_extract(DEMO_RAW_TEXT, "Demographics", DEMO_FIELDS, DEMO_CELLS)
     # previous_cancer not in DEMO_FIELDS so won't appear, but gender is
     assert results['gender'].value in ('Female', 'Male', None)
+
+def test_regex_extract_structured_row_gives_structured_verbatim():
+    """DOB is in row 1 (structured) — should be structured_verbatim."""
+    results = regex_extract(DEMO_RAW_TEXT, "Demographics", DEMO_FIELDS, DEMO_CELLS)
+    assert results['dob'].confidence_basis == "structured_verbatim"
+
+def test_regex_extract_freeform_row_gives_freeform_verbatim():
+    """A value found in row 5 (freeform) should be freeform_verbatim."""
+    freeform_cells = DEMO_CELLS + [
+        {"row": 5, "col": 0, "text": "Clinical details: T3 tumour at 5cm from anal verge"},
+    ]
+    fields = [{'key': 'dob', 'type': 'date'}]
+    raw_text = "Clinical details: T3 tumour at 5cm from anal verge\nDOB: 12/05/1955"
+    results = regex_extract(raw_text, "Demographics", fields, freeform_cells)
+    # DOB is matched from row 1, not row 5 — so still structured_verbatim
+    assert results['dob'].confidence_basis == "structured_verbatim"
+
+def test_build_unique_id_with_mrn():
+    from extractor.regex_extractor import build_unique_id
+    assert build_unique_id(
+        mdt_date="07/03/2025", initials="AO", gender="Male", mrn="9990001", nhs=""
+    ) == "07032025_AO_M_9990001"
+
+def test_build_unique_id_uses_nhs_last4_when_no_mrn():
+    from extractor.regex_extractor import build_unique_id
+    assert build_unique_id(
+        mdt_date="07/03/2025", initials="BK", gender="Female", mrn="", nhs="9990001234"
+    ) == "07032025_BK_F_1234"
+
+def test_build_unique_id_fallback_row_index():
+    from extractor.regex_extractor import build_unique_id
+    assert build_unique_id(
+        mdt_date="", initials="CJ", gender="", mrn="", nhs="", row_index=3
+    ) == "00000000_CJ_U_003"

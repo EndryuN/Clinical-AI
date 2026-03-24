@@ -7,51 +7,47 @@ All processing happens on your machine. No data leaves the local environment.
 ## Features
 
 - **DOCX Upload** — Drag-and-drop Word document upload with automatic patient detection
-- **Local LLM Extraction** — Uses Ollama (Llama 3.1 8B) running locally for zero data leakage
+- **Local LLM Extraction** — Uses Ollama (Qwen, Llama) or Claude API for zero data leakage
 - **Config-Driven** — `field_schema.yaml` defines all 88 fields across 16 clinical categories
-- **Confidence Scoring** — Each extracted field is rated HIGH/MEDIUM/LOW with colour-coded display
-- **Human-in-the-Loop** — Clinicians review and edit extractions before export
-- **Category Filtering** — Browse data by clinical category (Demographics, MRI, Treatment, etc.)
-- **Cancer Type Filtering** — Filter patient list by cancer type
-- **Excel Export** — Generates 97-column Excel matching the ground truth template
+- **Confidence System** — Green (structured verbatim), Orange (freeform verbatim), Red (inferred) colour coding with full provenance tracking
+- **Field Provenance** — Every field links back to the exact source cell it came from
+- **Coverage Tracking** — Toggle to see unused text with percentage coverage badge
+- **G049 Clinical Reference** — RCPath G049 definitions (TNM, MMR, EMVI, CRM, TRG) injected into LLM prompts for clinical accuracy, with `[G049]` citation in reasoning
+- **Self-Contained Excel** — Single `.xlsx` with 3 sheets (data + metadata + raw cells) enables full review on any machine without DOCX or LLM
+- **Cross-Machine Workflow** — Extract on a powerful PC, review/edit on a laptop
+- **Human-in-the-Loop** — Clinicians review, edit, and re-export before clinical use
+- **Unique Patient IDs** — `{MDT_date}_{initials}_{gender}_{MRN/NHS}` format for reliable tracking
+- **Parallel Extraction** — 1-3 concurrent LLM workers with live progress monitoring
 - **Analytics Dashboard** — Charts for cancer types, treatments, and confidence distribution
-- **Audit Trail** — Every extraction and manual edit is logged for clinical safety
+- **Audit Trail** — Every extraction and manual edit is logged
 
 ## Prerequisites
 
 - **Python 3.11+**
-- **Ollama** — https://ollama.com
+- **Ollama** — https://ollama.com (or Anthropic API key for Claude)
 
 ## Setup
 
-### 1. Install Ollama and pull the model
+### 1. Install Ollama and pull a model
 
 ```bash
 # Download and install Ollama from https://ollama.com
-# Then pull the model (default is qwen2.5:14b-instruct):
-ollama pull qwen2.5:14b-instruct
-
-# Other recommended models for testing:
-ollama pull qwen3:8b
-ollama pull qwen3.5:4b
-ollama pull llama3.1:8b
+# Then pull a model:
+ollama pull qwen3:8b              # Recommended: fast, good quality
+ollama pull qwen2.5:14b-instruct  # Higher quality, needs more RAM
+ollama pull qwen3.5:4b            # Lightweight option
 ```
 
 ### 2. Install Python dependencies
 
 ```bash
-cd "Clinical AI"
 pip install -r requirements.txt
 ```
 
-### 3. Place your data
-
-Put your MDT outcome proforma `.docx` file in the `data/` directory (or upload via the web UI).
-
-### 4. Run the application
+### 3. Run the application
 
 ```bash
-# Make sure Ollama is running
+# Start Ollama
 ollama serve
 
 # In a separate terminal:
@@ -60,38 +56,73 @@ python app.py
 
 Open http://localhost:5000 in your browser.
 
+### Claude API (optional)
+
+To use Claude instead of Ollama, set your API key:
+
+```bash
+set ANTHROPIC_API_KEY=sk-ant-...   # Windows
+export ANTHROPIC_API_KEY=sk-ant-...  # Linux/Mac
+python app.py
+```
+
+Switch between backends in the UI settings.
+
 ## Usage Workflow
 
+### Extraction (powerful PC)
 1. **Upload** — Drag your `.docx` file onto the landing page
-2. **Parse** — System detects patients automatically (e.g., "50 patients found")
-3. **Extract** — Click "Start Extraction" — watch live progress as each patient's data is extracted
-4. **Review** — Browse patients in the sidebar, switch category tabs, edit any field inline
-5. **Export** — Download the completed Excel spreadsheet
+2. **Configure** — Set patient limit and parallel workers (1-3)
+3. **Extract** — Watch live progress with per-patient timers and group tracking
+4. **Review** — Browse patients, check confidence colours, edit fields inline
+5. **Export** — Download the self-contained Excel file
+
+### Review (laptop, no DOCX needed)
+1. **Import** — Upload the Excel file on any machine
+2. **Preview** — Document previews regenerate from embedded raw cell data
+3. **Review** — Full confidence colours, source highlighting, coverage toggle
+4. **Edit & Re-export** — Make changes and export updated Excel
+
+## Confidence System
+
+| Colour | Basis | Meaning |
+|--------|-------|---------|
+| Green | `structured_verbatim` | Extracted by regex from a structured cell |
+| Orange | `freeform_verbatim` | LLM extracted, value exists verbatim in source text |
+| Red | `freeform_inferred` | LLM inferred — value not found verbatim in source |
+| Grey | `edited` | Clinician manually overrode the value |
+
+Every field tracks its `source_cell` (row/col), `source_snippet` (matched text), and `reason` (including `[G049]` citation when clinical reference was used).
 
 ## Project Structure
 
 ```
 Clinical AI/
-├── app.py                  # Flask app — all routes and SSE
-├── models.py               # Dataclasses: FieldResult, PatientBlock, ExtractionSession
-├── audit.py                # Audit trail logger
+├── app.py                        # Flask app — routes, SSE progress, extraction
+├── models.py                     # FieldResult, PatientBlock, ExtractionSession
+├── audit.py                      # JSON audit trail
 ├── config/
-│   ├── __init__.py         # Schema loader utility
-│   └── field_schema.yaml   # 88 fields, 16 groups — single source of truth
+│   ├── __init__.py               # Schema loaders
+│   └── field_schema.yaml         # 88 fields, 16 groups (single source of truth)
 ├── parser/
-│   └── docx_parser.py      # Word document parsing + patient splitting
+│   └── docx_parser.py            # DOCX parsing, cell dedup, patient splitting
 ├── extractor/
-│   ├── llm_client.py       # Ollama HTTP client
-│   ├── prompt_builder.py   # Builds prompts from schema
-│   └── response_parser.py  # Parses LLM JSON + confidence overrides
+│   ├── regex_extractor.py        # Regex pass + unique_id assignment
+│   ├── llm_client.py             # Ollama / Claude API backend
+│   ├── prompt_builder.py         # Prompt construction with G049 injection
+│   ├── response_parser.py        # LLM JSON parsing + verbatim check
+│   ├── clinical_context.py       # G049 RCPath definitions
+│   ├── coverage.py               # Unused text tracking (span-union)
+│   └── preview_renderer.py       # Pillow PNG rendering
 ├── export/
-│   └── excel_writer.py     # Generates 97-column Excel
+│   └── excel_writer.py           # 3-sheet Excel (data + metadata + raw cells)
 ├── static/
-│   ├── css/style.css       # Dark theme
-│   └── js/app.js           # Frontend logic
-├── templates/              # Jinja2 templates (5 pages)
-├── tests/                  # Schema validation + export round-trip tests
-└── docs/                   # Design spec and implementation plan
+│   ├── css/style.css             # Dark theme
+│   └── js/app.js                 # Frontend logic
+├── templates/                    # Jinja2 (index, process, review, analytics)
+├── tests/                        # 78 pytest tests
+├── docs/                         # Design specs and implementation plans
+└── G049-*.pdf                    # RCPath reference document
 ```
 
 ## Tech Stack
@@ -99,33 +130,36 @@ Clinical AI/
 | Component | Technology |
 |-----------|-----------|
 | Backend | Python 3.11+ / Flask |
-| LLM | Ollama + Llama 3.1 8B (local) |
+| LLM | Ollama (Qwen, Llama) or Claude API |
 | DOCX Parsing | python-docx |
-| Excel Export | openpyxl |
-| Frontend | Bootstrap 5 (dark), Chart.js, DataTables |
-| Config | YAML (field_schema.yaml) |
+| Excel | openpyxl |
+| Preview | Pillow |
+| Frontend | Bootstrap 5 (dark theme), vanilla JS, Chart.js |
+| Config | YAML |
+| Testing | pytest |
 
-## DTAC & Clinical Safety
+## Clinical Safety
 
-- **Data Residency** — All data stays on localhost. No external API calls.
+- **Data Residency** — All data stays on localhost. No external API calls (unless Claude API is opted in).
 - **Human-in-the-Loop** — Clinician reviews all extractions before export.
-- **Confidence Flags** — RED/AMBER/GREEN visual indicators on every field.
+- **Provenance** — Every field traces back to its source cell and extraction method.
+- **G049 Citation** — LLM marks when clinical reference definitions drove a classification.
 - **Audit Trail** — Every extraction and edit logged with timestamps.
 - **Not a Medical Device** — This is a data extraction aid, not clinical decision support.
+
+## Running Tests
+
+```bash
+python -m pytest tests/ -v    # 78 tests
+```
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---------|-----|
 | "Cannot connect to Ollama" | Run `ollama serve` in a terminal |
-| "Model not found" | Run `ollama pull qwen2.5:14b-instruct` (or `qwen3:8b`, `qwen3.5:4b`) |
-| Extraction very slow | Close other apps to free RAM. Check `ollama ps` for GPU usage. |
-| 0 patients detected | Check document format. Use `/debug/raw-text` to inspect. |
-| Port 5000 in use | Run `python app.py --port 5001` |
-| ModuleNotFoundError | Run `pip install -r requirements.txt` |
-
-## Running Tests
-
-```bash
-pytest tests/ -v
-```
+| "Model not found" | Run `ollama pull qwen3:8b` |
+| Extraction slow | Close other apps, check `ollama ps` for GPU. Try `qwen3.5:4b` for speed. |
+| 0 patients detected | Check document format matches MDT proforma structure |
+| Previews show old layout | Re-upload DOCX — previews are cached PNGs |
+| Port 5000 in use | `python app.py --port 5001` |

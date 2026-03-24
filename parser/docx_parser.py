@@ -36,6 +36,7 @@ from models import PatientBlock, CellRef
 
 _NHS_RE = re.compile(r'NHS Number:\s*([\d\s()\w]+?)(?:\n|$)', re.IGNORECASE)
 _HOSPITAL_RE = re.compile(r'Hospital Number:\s*(\S+)', re.IGNORECASE)
+_GENDER_RE = re.compile(r'\b(Male|Female)\b', re.IGNORECASE)
 # Name may appear as:
 #   "AIDEN O'CONNOR(b)"          – all-caps with trailing annotation
 #   "Erin Hall"                   – mixed-case after hospital/NHS lines
@@ -101,6 +102,12 @@ def _extract_nhs(details_text: str) -> str:
     return digits
 
 
+def _extract_gender(details_text: str) -> str:
+    """Return 'Male', 'Female', or '' if not found."""
+    m = _GENDER_RE.search(details_text)
+    return m.group(1).capitalize() if m else ""
+
+
 def _table_to_text(table) -> str:
     """
     Flatten a patient table into a single readable text block.
@@ -127,12 +134,26 @@ def _table_to_text(table) -> str:
 def _table_to_cells(table) -> list[CellRef]:
     """Return all cells in the table as a flat list with stable row/col coordinates.
 
-    Empty cells are included so row/col indices are stable for source highlighting.
+    Duplicate cells are removed using two strategies:
+    1. XML element identity (python-docx merged cells share the same _tc)
+    2. Adjacent text comparison (Word sometimes copies content without true merge)
+    Column indices are renumbered sequentially per row after deduplication.
     """
     cells = []
     for i, row in enumerate(table.rows):
-        for j, cell in enumerate(row.cells):
-            cells.append({"row": i, "col": j, "text": cell.text.strip()})
+        seen_tcs = set()
+        prev_text = None
+        col_idx = 0
+        for cell in row.cells:
+            tc_id = id(cell._tc)
+            text = cell.text.strip()
+            # Skip if same XML element (true merge) or same text as previous cell
+            if tc_id in seen_tcs or (prev_text is not None and text == prev_text):
+                continue
+            seen_tcs.add(tc_id)
+            prev_text = text
+            cells.append({"row": i, "col": col_idx, "text": text})
+            col_idx += 1
     return cells
 
 
@@ -220,6 +241,8 @@ def parse_docx(file_path: str) -> list[PatientBlock]:
             id=patient_id,
             initials=_initials(name) if name else "",
             nhs_number=nhs,
+            gender=_extract_gender(details_cell),
+            mdt_date=mdt_date,
             raw_text=raw_text,
             raw_cells=raw_cells,
         ))

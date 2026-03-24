@@ -81,16 +81,17 @@ function showUploadError(msg) {
 
 // ===== Process Page =====
 function initProcessPage() {
-    // Show current model
+    // Show current model in both pre-extraction and active extraction sections
     fetch('/backend')
         .then(r => r.json())
         .then(b => {
+            const modelText = b.backend === 'claude'
+                ? 'Claude API'
+                : `${b.ollama_model} (Ollama)`;
             const el = document.getElementById('current-model');
-            if (el) {
-                el.textContent = b.backend === 'claude'
-                    ? 'Claude API'
-                    : `${b.ollama_model} (Ollama)`;
-            }
+            if (el) el.textContent = modelText;
+            const activeEl = document.getElementById('active-model');
+            if (activeEl) activeEl.textContent = modelText;
         })
         .catch(() => {});
 
@@ -203,7 +204,8 @@ function listenProgress() {
             if (completeSection) completeSection.classList.remove('d-none');
             if (completeSummary) {
                 const statusText = data.status === 'stopped' ? 'Extraction stopped.' : 'Extraction complete.';
-                completeSummary.textContent = `${statusText} ${data.current_patient} / ${data.total} patients processed. Average speed: ${data.average_seconds}s per patient.`;
+                const throughput = data.throughput_seconds || data.average_seconds || 0;
+                completeSummary.textContent = `${statusText} ${data.current_patient} / ${data.total} patients processed. ${throughput}s avg per patient.`;
             }
             return;
         }
@@ -223,8 +225,21 @@ function listenProgress() {
             progressText.textContent = `${donePatientsCount} / ${total} patients`;
         }
 
-        if (averageSpeedEl && data.average_seconds > 0) {
-            averageSpeedEl.textContent = `${data.average_seconds}s / patient`;
+        // Average speed: show throughput (wall time / completed) when multithreaded
+        if (averageSpeedEl) {
+            const throughput = data.throughput_seconds || 0;
+            const avgLlm = data.average_seconds || 0;
+            const activeCount = Object.keys(data.active_patients || {}).length;
+            if (throughput > 0) {
+                // Show throughput rate (accounts for parallelism)
+                averageSpeedEl.textContent = `${throughput}s / patient`;
+                // If running parallel, show LLM time in parentheses
+                if (activeCount > 1 && avgLlm > 0 && avgLlm !== throughput) {
+                    averageSpeedEl.textContent += ` (${avgLlm}s LLM)`;
+                }
+            } else if (avgLlm > 0) {
+                averageSpeedEl.textContent = `${avgLlm}s / patient`;
+            }
         }
 
         // Render active patient cards — each with its own group progress bar
@@ -234,13 +249,15 @@ function listenProgress() {
                 activePatientsList.innerHTML = '<span class="text-muted small">Waiting...</span>';
             } else {
                 activePatientsList.innerHTML = active.map(([id, p]) => {
-                    const elapsed = Math.floor((Date.now() - (p.start * 1000)) / 1000);
+                    const isQueued = p.status === 'queued';
+                    // Timer: show LLM processing time (from llm_start), not queue time
+                    const timerBase = (!isQueued && p.llm_start) ? p.llm_start : p.start;
+                    const elapsed = Math.floor((Date.now() - (timerBase * 1000)) / 1000);
                     const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
                     const secs = (elapsed % 60).toString().padStart(2, '0');
-                    const isQueued = p.status === 'queued';
                     const accentColor = isQueued ? '#4b5563' : '#0d6efd';
                     const timerColor = isQueued ? '#6b7280' : '#f59e0b';
-                    const groupLabel = isQueued ? `⏳ ${p.group}` : p.group || 'Starting...';
+                    const groupLabel = isQueued ? `Queued` : p.group || 'Starting...';
                     const contextBadge = (!isQueued && p.has_context)
                         ? `<span style="font-size:9px; background:#1e3a5f; color:#60a5fa; border:1px solid #2563eb; border-radius:3px; padding:1px 4px; margin-left:5px; vertical-align:middle;">G049</span>`
                         : '';
@@ -248,10 +265,16 @@ function listenProgress() {
                     const groupsTotal = p.groups_total || 1;
                     const groupPct = Math.round(groupsDone / groupsTotal * 100);
                     const miniBarColor = isQueued ? '#374151' : '#2563eb';
+                    const statusLabel = isQueued
+                        ? `<span style="font-size:9px; color:#6b7280;">QUEUED</span>`
+                        : `<span style="font-size:9px; color:#60a5fa;">${groupsDone}/${groupsTotal} groups</span>`;
                     return `<div style="background:#111827; border:1px solid ${accentColor}; border-radius:6px; padding:8px 12px; min-width:160px; opacity:${isQueued ? '0.7' : '1'};">` +
                            `<div style="font-size:12px; font-weight:700; color:#f0f0f0; letter-spacing:0.5px;">${p.initials || 'Patient'}</div>` +
                            `<div style="font-size:10px; color:#9ca3af; margin-top:2px;">${groupLabel}${contextBadge}</div>` +
-                           `<div style="font-size:14px; font-weight:700; color:${timerColor}; font-family:monospace; margin-top:4px;">${mins}:${secs}</div>` +
+                           `<div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:4px;">` +
+                           `<span style="font-size:14px; font-weight:700; color:${timerColor}; font-family:monospace;">${mins}:${secs}</span>` +
+                           `${statusLabel}` +
+                           `</div>` +
                            `<div style="margin-top:6px; background:#1f2937; border-radius:3px; height:3px; overflow:hidden;">` +
                            `<div style="width:${groupPct}%; height:100%; background:${miniBarColor}; transition:width 0.5s ease;"></div>` +
                            `</div>` +
@@ -266,7 +289,8 @@ function listenProgress() {
             if (log) {
                 log.innerHTML = data.completed_patients.slice().reverse().map(p => {
                     const c = p.confidence_summary || {};
-                    const timeStr = p.seconds ? `(${p.seconds}s)` : '';
+                    const llmTime = p.llm_seconds || p.seconds || 0;
+                    const timeStr = llmTime ? `(${llmTime}s)` : '';
                     return `<div class="text-muted py-1 d-flex justify-content-between">` +
                         `<span>&#x2713; ${p.initials || p.id} &middot; ` +
                         `<span class="text-success">${c.high || 0} high</span> &middot; ` +
@@ -398,14 +422,17 @@ function selectPatient(patientId) {
                         previewImg.src = preview.image_url;
                         previewImg.style.display = 'block';
                         if (previewPlaceholder) previewPlaceholder.style.display = 'none';
+                        initCoverageToggle(preview.coverage_map, preview.coverage_pct, preview.coords, preview.coverage_stats);
                     } else {
                         if (previewImg) previewImg.style.display = 'none';
                         if (previewPlaceholder) previewPlaceholder.style.display = 'block';
+                        initCoverageToggle(null, null, null, null);
                     }
                 })
                 .catch(() => {
                     if (previewImg) previewImg.style.display = 'none';
                     if (previewPlaceholder) previewPlaceholder.style.display = 'block';
+                    initCoverageToggle(null, null, null, null);
                 });
 
             // Store extractions for re-rendering on filter change
@@ -642,6 +669,7 @@ function renderFieldTable(fields, groupName) {
             <td class="text-center" style="min-width: 140px;">
                 <span class="badge bg-${confClass}" style="font-size:10px; ${confStyle}">${confText}</span>
                 ${editedBadge}
+                ${fr.source_cell ? '<span class="source-link badge bg-light text-secondary border ms-1" data-row="' + fr.source_cell.row + '" data-col="' + fr.source_cell.col + '" style="cursor:pointer;font-size:9px" title="Click to highlight source cell">src</span>' : (hasValue ? '<span class="badge bg-light text-muted border ms-1" style="font-size:9px" title="Source cell not available">no src</span>' : '')}
             </td>
         </tr>${reasonRow}`;
     }).join('');
@@ -782,4 +810,120 @@ function linkSourceFile(file) {
             btn.disabled = false;
             alert('Link failed: ' + err);
         });
+}
+
+// ── Coverage stats + unused highlight ──
+let _coverageVisible = false;
+let _coverageMap = null;
+
+function initCoverageToggle(coverageMap, coveragePct, coords, coverageStats) {
+    _coverageMap = coverageMap;
+    _coverageVisible = false;
+
+    const container = document.getElementById('coverage-toggle-container');
+    const btn = document.getElementById('coverage-toggle-btn');
+    const verbatimBadge = document.getElementById('cov-verbatim');
+    const inferredBadge = document.getElementById('cov-inferred');
+    const unusedBadge = document.getElementById('cov-unused');
+
+    if (!container || !btn) return;
+
+    // Reset
+    btn.textContent = 'Highlight unused';
+    btn.classList.add('btn-outline-warning');
+    btn.classList.remove('btn-warning');
+    btn.disabled = false;
+
+    // Remove old listener by cloning
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    // Remove existing overlay
+    const existing = document.getElementById('coverage-svg-overlay');
+    if (existing) existing.remove();
+
+    if (!coverageMap || Object.keys(coverageMap).length === 0) {
+        container.classList.remove('d-none');
+        newBtn.disabled = true;
+        newBtn.title = 'Coverage data not available';
+        if (verbatimBadge) verbatimBadge.classList.add('d-none');
+        if (inferredBadge) inferredBadge.classList.add('d-none');
+        if (unusedBadge) unusedBadge.classList.add('d-none');
+        return;
+    }
+
+    container.classList.remove('d-none');
+
+    // Populate 3 stat badges
+    if (coverageStats) {
+        if (verbatimBadge) {
+            verbatimBadge.textContent = coverageStats.verbatim_pct + '% verbatim';
+            verbatimBadge.classList.remove('d-none');
+        }
+        if (inferredBadge) {
+            inferredBadge.textContent = coverageStats.inferred_fields + ' inferred';
+            inferredBadge.classList.remove('d-none');
+        }
+        if (unusedBadge) {
+            unusedBadge.textContent = coverageStats.unused_pct + '% unused';
+            unusedBadge.classList.remove('d-none');
+        }
+    }
+
+    newBtn.addEventListener('click', () => {
+        _coverageVisible = !_coverageVisible;
+        newBtn.textContent = _coverageVisible ? 'Hide highlights' : 'Highlight unused';
+        newBtn.classList.toggle('btn-warning', _coverageVisible);
+        newBtn.classList.toggle('btn-outline-warning', !_coverageVisible);
+        renderCoverageOverlay(_coverageVisible, coords);
+    });
+}
+
+function renderCoverageOverlay(show, coords) {
+    const existing = document.getElementById('coverage-svg-overlay');
+    if (existing) existing.remove();
+    if (!show || !_coverageMap || !coords) return;
+
+    const previewImg = document.getElementById('preview-img');
+    if (!previewImg || previewImg.naturalWidth === 0) return;
+
+    const scaleX = previewImg.clientWidth / previewImg.naturalWidth;
+    const scaleY = previewImg.clientHeight / previewImg.naturalHeight;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.id = 'coverage-svg-overlay';
+    svg.style.cssText = 'position:absolute;top:0;left:0;' +
+        'width:' + previewImg.clientWidth + 'px;' +
+        'height:' + previewImg.clientHeight + 'px;' +
+        'pointer-events:none;z-index:10;';
+
+    for (const [cellKey, spans] of Object.entries(_coverageMap)) {
+        if (!spans || spans.length === 0) continue;
+        const cellCoord = coords[cellKey];
+        if (!cellCoord) continue;
+
+        const unusedLen = spans.filter(s => !s.used).reduce((a, s) => a + (s.end - s.start), 0);
+        const totalLen = spans.reduce((a, s) => a + (s.end - s.start), 0);
+        if (totalLen === 0 || unusedLen === 0) continue;
+
+        const ratio = unusedLen / totalLen;
+        const opacity = Math.min(0.5, ratio * 0.6);
+
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', cellCoord.x * scaleX);
+        rect.setAttribute('y', cellCoord.y * scaleY);
+        rect.setAttribute('width', cellCoord.w * scaleX);
+        rect.setAttribute('height', cellCoord.h * scaleY);
+        rect.setAttribute('fill', 'rgba(255,140,0,' + opacity + ')');
+        rect.setAttribute('stroke', 'rgba(255,120,0,0.7)');
+        rect.setAttribute('stroke-width', '2');
+        rect.setAttribute('stroke-dasharray', '4,2');
+        svg.appendChild(rect);
+    }
+
+    const previewContainer = document.getElementById('preview-container');
+    if (previewContainer) {
+        previewContainer.style.position = 'relative';
+        previewContainer.appendChild(svg);
+    }
 }

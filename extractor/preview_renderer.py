@@ -132,8 +132,9 @@ def render_patient_preview(patient: PatientBlock, out_dir: str) -> dict:
             x += col_w
         y += h
 
-    png_path = os.path.join(out_dir, f'{patient.id}.png')
-    json_path = os.path.join(out_dir, f'{patient.id}.json')
+    file_id = patient.unique_id if patient.unique_id else patient.id
+    png_path = os.path.join(out_dir, f'{file_id}.png')
+    json_path = os.path.join(out_dir, f'{file_id}.json')
     img.save(png_path, 'PNG')
     with open(json_path, 'w') as f:
         json.dump(coords, f)

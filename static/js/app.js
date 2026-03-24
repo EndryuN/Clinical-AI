@@ -398,14 +398,17 @@ function selectPatient(patientId) {
                         previewImg.src = preview.image_url;
                         previewImg.style.display = 'block';
                         if (previewPlaceholder) previewPlaceholder.style.display = 'none';
+                        initCoverageToggle(preview.coverage_map, preview.coverage_pct, preview.coords);
                     } else {
                         if (previewImg) previewImg.style.display = 'none';
                         if (previewPlaceholder) previewPlaceholder.style.display = 'block';
+                        initCoverageToggle(null, null, null);
                     }
                 })
                 .catch(() => {
                     if (previewImg) previewImg.style.display = 'none';
                     if (previewPlaceholder) previewPlaceholder.style.display = 'block';
+                    initCoverageToggle(null, null, null);
                 });
 
             // Store extractions for re-rendering on filter change
@@ -642,6 +645,7 @@ function renderFieldTable(fields, groupName) {
             <td class="text-center" style="min-width: 140px;">
                 <span class="badge bg-${confClass}" style="font-size:10px; ${confStyle}">${confText}</span>
                 ${editedBadge}
+                ${fr.source_cell ? '<span class="source-link badge bg-light text-secondary border ms-1" data-row="' + fr.source_cell.row + '" data-col="' + fr.source_cell.col + '" style="cursor:pointer;font-size:9px" title="Click to highlight source cell">src</span>' : (hasValue ? '<span class="badge bg-light text-muted border ms-1" style="font-size:9px" title="Source cell not available">no src</span>' : '')}
             </td>
         </tr>${reasonRow}`;
     }).join('');
@@ -782,4 +786,110 @@ function linkSourceFile(file) {
             btn.disabled = false;
             alert('Link failed: ' + err);
         });
+}
+
+// ── Coverage toggle ──
+let _coverageVisible = false;
+let _coverageMap = null;
+let _coveragePct = null;
+
+function initCoverageToggle(coverageMap, coveragePct, coords) {
+    _coverageMap = coverageMap;
+    _coveragePct = coveragePct;
+    _coverageVisible = false;
+
+    const container = document.getElementById('coverage-toggle-container');
+    const btn = document.getElementById('coverage-toggle-btn');
+    const badge = document.getElementById('coverage-badge');
+
+    if (!container || !btn) return;
+
+    // Reset button state
+    btn.textContent = 'Show unused text';
+    btn.classList.add('btn-outline-warning');
+    btn.classList.remove('btn-warning');
+    btn.disabled = false;
+    btn.title = '';
+    if (badge) {
+        badge.classList.remove('d-none');
+        badge.textContent = '';
+    }
+
+    // Remove old event listener by cloning
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    // Remove any existing overlay
+    const existing = document.getElementById('coverage-svg-overlay');
+    if (existing) existing.remove();
+
+    if (!coverageMap || Object.keys(coverageMap).length === 0) {
+        container.classList.remove('d-none');
+        newBtn.disabled = true;
+        newBtn.title = 'Coverage data not available (legacy file)';
+        if (badge) badge.classList.add('d-none');
+        return;
+    }
+
+    container.classList.remove('d-none');
+    if (coveragePct !== null && coveragePct !== undefined) {
+        badge.textContent = coveragePct + '% covered';
+    } else {
+        if (badge) badge.classList.add('d-none');
+    }
+
+    newBtn.addEventListener('click', () => {
+        _coverageVisible = !_coverageVisible;
+        newBtn.textContent = _coverageVisible ? 'Hide unused text' : 'Show unused text';
+        newBtn.classList.toggle('btn-warning', _coverageVisible);
+        newBtn.classList.toggle('btn-outline-warning', !_coverageVisible);
+        renderCoverageOverlay(_coverageVisible, coords);
+    });
+}
+
+function renderCoverageOverlay(show, coords) {
+    const existing = document.getElementById('coverage-svg-overlay');
+    if (existing) existing.remove();
+    if (!show || !_coverageMap || !coords) return;
+
+    const previewImg = document.getElementById('preview-img');
+    if (!previewImg || previewImg.naturalWidth === 0) return;
+
+    const scaleX = previewImg.clientWidth / previewImg.naturalWidth;
+    const scaleY = previewImg.clientHeight / previewImg.naturalHeight;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.id = 'coverage-svg-overlay';
+    svg.style.cssText = 'position:absolute;top:0;left:0;' +
+        'width:' + previewImg.clientWidth + 'px;' +
+        'height:' + previewImg.clientHeight + 'px;' +
+        'pointer-events:none;z-index:10;';
+
+    for (const [cellKey, spans] of Object.entries(_coverageMap)) {
+        if (!spans || spans.length === 0) continue;
+        const cellCoord = coords[cellKey];
+        if (!cellCoord) continue;
+        const unusedLen = spans.filter(s => !s.used).reduce((a, s) => a + (s.end - s.start), 0);
+        const totalLen = spans.reduce((a, s) => a + (s.end - s.start), 0);
+        if (totalLen === 0 || unusedLen === 0) continue;
+
+        const ratio = unusedLen / totalLen;
+        const opacity = Math.min(0.6, ratio * 0.8);
+
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', cellCoord.x * scaleX);
+        rect.setAttribute('y', cellCoord.y * scaleY);
+        rect.setAttribute('width', cellCoord.w * scaleX);
+        rect.setAttribute('height', cellCoord.h * scaleY);
+        rect.setAttribute('fill', 'rgba(255,165,0,' + opacity + ')');
+        rect.setAttribute('stroke', 'rgba(255,140,0,0.6)');
+        rect.setAttribute('stroke-width', '1');
+        svg.appendChild(rect);
+    }
+
+    const previewContainer = document.getElementById('preview-container');
+    if (previewContainer) {
+        previewContainer.style.position = 'relative';
+        previewContainer.appendChild(svg);
+    }
 }

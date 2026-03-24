@@ -143,3 +143,11 @@ Test files: `test_models.py`, `test_parser.py`, `test_regex_extractor.py`, `test
 - Preview PNGs are cached — re-upload DOCX after parser changes to see new layout
 - Word merged cells may not share `_tc` elements — text-based adjacent dedup is the fallback
 - Coverage only counts freeform cells (rows 4-7); `coverage_pct = None` means no freeform text (not 0%)
+
+## Design Context
+
+**Personality:** Clinical, Trustworthy, Efficient. GitHub/Linear aesthetic.
+**Theme:** Dark default with light mode toggle (persisted in localStorage). CSS uses `var(--app-*)` custom properties.
+**Colour rules:** Green/orange/red are reserved for confidence levels only. No decorative colour.
+**Principles:** Data density over whitespace. Colour means something. Progressive disclosure. Source transparency. Zero-friction review.
+**Full design spec:** See `.impeccable.md` for complete design guidelines.

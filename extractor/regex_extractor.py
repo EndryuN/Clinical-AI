@@ -10,6 +10,30 @@ left for the LLM.
 import re
 from models import FieldResult
 
+# Freeform rows: clinical details (4,5) and MDT outcome (6,7)
+_FREEFORM_ROWS = {4, 5, 6, 7}
+
+
+def build_unique_id(mdt_date: str, initials: str, gender: str,
+                    mrn: str, nhs: str, row_index: int = 0) -> str:
+    """Construct unique patient ID: {DDMMYYYY}_{initials}_{G}_{disambiguator}."""
+    date_clean = re.sub(r'[/\-\. ]', '', mdt_date) if mdt_date else "00000000"
+    inits = initials or "XX"
+    g = "U"
+    if gender:
+        gl = gender.lower()
+        if gl in ("male", "m"):
+            g = "M"
+        elif gl in ("female", "f"):
+            g = "F"
+    if mrn:
+        disambig = mrn
+    elif nhs and len(nhs) >= 4:
+        disambig = nhs[-4:]
+    else:
+        disambig = f"{row_index:03d}"
+    return f"{date_clean}_{inits}_{g}_{disambig}"
+
 
 def regex_extract(raw_text: str, group_name: str, fields: list[dict], raw_cells: list[dict] | None = None) -> dict[str, FieldResult]:
     """Extract fields from raw text using regex. Returns dict of field_key -> FieldResult.
@@ -58,11 +82,18 @@ def regex_extract(raw_text: str, group_name: str, fields: list[dict], raw_cells:
                 for cell in raw_cells:
                     if raw_span in cell["text"]:
                         source_cell = {"row": cell["row"], "col": cell["col"]}
-                        source_snippet = raw_span
+                        source_snippet = raw_span[:200]  # cap at 200 chars
                         break
+
+            # Determine confidence_basis from which row the source is in
+            if source_cell:
+                basis = "freeform_verbatim" if source_cell["row"] in _FREEFORM_ROWS else "structured_verbatim"
+            else:
+                basis = "structured_verbatim"  # regex match without traceable cell → assume structured
+
             results[key] = FieldResult(
                 value=value,
-                confidence_basis='structured_verbatim',
+                confidence_basis=basis,
                 reason='Extracted verbatim from document text',
                 source_cell=source_cell,
                 source_snippet=source_snippet,
@@ -645,3 +676,18 @@ def _extract_ww_dates(text: str) -> dict:
         result[f'ww_mri_{i+1}_date'] = (mm.group(1), mm.group(0))
 
     return result
+
+
+def assign_unique_id(patient, demographics_results: dict, row_index: int = 0) -> None:
+    """Set patient.unique_id using Demographics extraction results."""
+    gender_fr = demographics_results.get("gender")
+    mrn_fr = demographics_results.get("mrn")
+    nhs_fr = demographics_results.get("nhs_number")
+    patient.unique_id = build_unique_id(
+        mdt_date=patient.mdt_date,
+        initials=patient.initials,
+        gender=gender_fr.value if gender_fr and gender_fr.value else "",
+        mrn=mrn_fr.value if mrn_fr and mrn_fr.value else "",
+        nhs=nhs_fr.value if nhs_fr and nhs_fr.value else "",
+        row_index=row_index,
+    )

@@ -31,7 +31,6 @@ def test_second_mri_context_contains_trg():
 
 def test_unknown_group_returns_empty():
     assert get_context_for_group("Demographics") == ""
-    assert get_context_for_group("Watch and Wait") == ""
     assert get_context_for_group("nonexistent") == ""
 
 
@@ -40,3 +39,31 @@ def test_all_mri_groups_have_trg_context():
     for group in ("Second MRI", "12-Week MRI"):
         ctx = get_context_for_group(group)
         assert "TRG" in ctx, f"No TRG context for {group}"
+
+
+def test_endoscopy_context_has_type_classification():
+    ctx = get_context_for_group("Endoscopy")
+    assert "Colonoscopy complete" in ctx
+    assert "Incomplete" in ctx
+    assert "Flexi sig" in ctx
+
+
+def test_surgery_context_has_intent():
+    ctx = get_context_for_group("Surgery")
+    assert "Curative" in ctx
+    assert "Palliative" in ctx
+    assert "APR" in ctx
+
+
+def test_watch_wait_context_has_reasons():
+    ctx = get_context_for_group("Watch and Wait")
+    assert "complete clinical response" in ctx.lower() or "cCR" in ctx
+    assert "W&W" in ctx
+
+
+def test_mri_uses_radiological_not_pathological_staging():
+    """MRI context should use mrT (radiological) not pT (pathological)."""
+    ctx = get_context_for_group("Baseline MRI")
+    assert "mrT" in ctx or "MRI" in ctx
+    # Should NOT have pT prefix for radiological groups
+    assert "pT1:" not in ctx

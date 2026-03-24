@@ -1,10 +1,12 @@
 # extractor/prompt_builder.py
 from config import get_groups
-from extractor.clinical_context import get_context_for_group
+from extractor.clinical_context import get_context_for_group, ABBREVIATIONS
 
 _SYSTEM_TEMPLATE = """You are a clinical data extraction assistant specialising in NHS MDT (Multidisciplinary Team Meeting) outcome proformas for colorectal cancer patients.
 
 The document uses annotation markers: (a)=DOB, (b)=Name, (c)=NHS Number, (d)=Hospital Number, (e)=Gender, (f)=Clinical Details/Endoscopy, (g)=Staging & Diagnosis/Histology, (h)=MDT Outcome/Imaging, (i)=MDT date.
+
+{abbreviations}
 
 IMPORTANT RULES:
 - If a date or value is not mentioned in the text, return null as the value.
@@ -22,20 +24,21 @@ IMPORTANT RULES:
 For each field, provide:
 - "value": the extracted value, or null if not mentioned in the text
 - "confidence": one of "high", "medium", or "low"
-- "reason": a brief explanation (1 sentence) of WHY you assigned this confidence level.{g049_reason_rule}
+- "reason": a brief explanation (1 sentence) of WHY you assigned this confidence level.{context_reason_rule}
 - "source_section": annotation marker where the value was found, e.g. "(h)", or null
 
 Confidence levels:
-- "high": the value is explicitly and clearly stated in the text (e.g., "DOB: 26/05/1970", "Male", "NHS Number: 9990000001")
-- "medium": the value is inferred from context or partially stated (e.g., staging derived from a TNM string, treatment approach summarised from discussion notes)
-- "low": the value is ambiguous, unclear, or you are guessing based on limited information
+- "high": the value is explicitly and clearly stated in the text
+- "medium": the value is inferred from context or partially stated
+- "low": the value is ambiguous, unclear, or you are guessing
 
-{g049_section}Return ONLY valid JSON in this exact format:
+{context_section}Return ONLY valid JSON in this exact format:
 {{
 {json_example}
 }}"""
 
-_G049_REASON_RULE = """ If you used the G049 Clinical Reference below to classify or interpret a value, you MUST start your reason with "[G049]" and cite the specific definition (e.g. "[G049] Matched pT3b: 1-5mm beyond muscularis propria"). If you did NOT use the reference, do not mention G049."""
+_CONTEXT_REASON_RULE = """ If you used the Clinical Reference below to classify or interpret a value, start your reason with "[REF]" and cite the specific definition used. If you did NOT use the reference, do not mention it."""
+
 
 def build_prompt(patient_text: str, group: dict) -> tuple[str, str]:
     """Build system and user prompts for a specific schema group.
@@ -49,16 +52,17 @@ def build_prompt(patient_text: str, group: dict) -> tuple[str, str]:
         for f in group['fields']
     )
 
-    g049_context = get_context_for_group(group['name'])
-    g049_section = ""
-    g049_reason_rule = ""
-    if g049_context:
-        g049_section = f"## Clinical Reference (G049 RCPath)\n{g049_context}\n\n"
-        g049_reason_rule = _G049_REASON_RULE
+    context = get_context_for_group(group['name'])
+    context_section = ""
+    context_reason_rule = ""
+    if context:
+        context_section = f"## Clinical Reference\n{context}\n\n"
+        context_reason_rule = _CONTEXT_REASON_RULE
 
     system_prompt = _SYSTEM_TEMPLATE.format(
-        g049_section=g049_section,
-        g049_reason_rule=g049_reason_rule,
+        abbreviations=ABBREVIATIONS,
+        context_section=context_section,
+        context_reason_rule=context_reason_rule,
         json_example=json_example,
     )
     user_prompt = (

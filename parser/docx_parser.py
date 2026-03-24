@@ -134,12 +134,21 @@ def _table_to_text(table) -> str:
 def _table_to_cells(table) -> list[CellRef]:
     """Return all cells in the table as a flat list with stable row/col coordinates.
 
-    Empty cells are included so row/col indices are stable for source highlighting.
+    Merged cells (common in Word tables) are deduplicated using the underlying
+    XML element identity — only the first occurrence of each cell is kept.
+    Column indices are renumbered sequentially per row after deduplication.
     """
     cells = []
     for i, row in enumerate(table.rows):
-        for j, cell in enumerate(row.cells):
-            cells.append({"row": i, "col": j, "text": cell.text.strip()})
+        seen_tcs = set()
+        col_idx = 0
+        for cell in row.cells:
+            tc_id = id(cell._tc)
+            if tc_id in seen_tcs:
+                continue  # skip duplicate from merged cell
+            seen_tcs.add(tc_id)
+            cells.append({"row": i, "col": col_idx, "text": cell.text.strip()})
+            col_idx += 1
     return cells
 
 

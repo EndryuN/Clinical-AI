@@ -12,10 +12,16 @@ from models import PatientBlock
 
 # Layout constants
 IMG_WIDTH = 800
-COL_WIDTHS = [480, 160, 160]  # 60% / 20% / 20%
 HEADER_ROW_HEIGHT = 36        # rows 0, 2, 4, 6 (section headers)
 CONTENT_ROW_HEIGHT = 72       # rows 1, 3, 5, 7 (data content — 72px gives 4 lines at 11px + padding)
 CELL_PADDING = 6
+
+# Column width presets by column count
+_COL_PRESETS = {
+    1: [800],
+    2: [520, 280],           # 65% / 35%
+    3: [480, 160, 160],      # 60% / 20% / 20%
+}
 
 # Header rows by table row index
 _HEADER_ROWS = {0, 2, 4, 6}
@@ -86,6 +92,15 @@ def render_patient_preview(patient: PatientBlock, out_dir: str) -> dict:
 
     num_rows = max(row_map) + 1
 
+    # Determine column count from data (max col index + 1)
+    num_cols = max((c['col'] for c in patient.raw_cells), default=0) + 1
+    col_widths = _COL_PRESETS.get(num_cols)
+    if col_widths is None:
+        # Fallback: first column 60%, rest split equally
+        first_w = IMG_WIDTH * 60 // 100
+        rest_w = (IMG_WIDTH - first_w) // max(num_cols - 1, 1)
+        col_widths = [first_w] + [rest_w] * (num_cols - 1)
+
     # Per-row heights
     row_heights = [
         HEADER_ROW_HEIGHT if r in _HEADER_ROWS else CONTENT_ROW_HEIGHT
@@ -107,7 +122,7 @@ def render_patient_preview(patient: PatientBlock, out_dir: str) -> dict:
         bg = _BG.get(r, _DEFAULT_BG)
         x = 0
 
-        for c, col_w in enumerate(COL_WIDTHS):
+        for c, col_w in enumerate(col_widths):
             # Draw cell
             draw.rectangle([x, y, x + col_w - 1, y + h - 1], fill=bg, outline=_BORDER_COLOUR)
             coords[f'{r},{c}'] = {'x': x, 'y': y, 'w': col_w, 'h': h}

@@ -866,15 +866,17 @@ function initCoverageToggle(coverageMap, coveragePct, coords, coverageStats) {
     // Populate 3 stat badges
     if (coverageStats) {
         if (verbatimBadge) {
-            verbatimBadge.textContent = coverageStats.verbatim_pct + '% verbatim';
+            verbatimBadge.textContent = (coverageStats.used_pct || coverageStats.verbatim_pct || 0) + '% extracted';
             verbatimBadge.classList.remove('d-none');
         }
         if (inferredBadge) {
-            inferredBadge.textContent = coverageStats.inferred_fields + ' inferred';
+            const inf = coverageStats.inferred_fields || 0;
+            inferredBadge.textContent = inf + ' inferred';
             inferredBadge.classList.remove('d-none');
+            if (inf === 0) inferredBadge.classList.add('d-none');
         }
         if (unusedBadge) {
-            unusedBadge.textContent = coverageStats.unused_pct + '% unused';
+            unusedBadge.textContent = (coverageStats.unused_pct || 0) + '% unused';
             unusedBadge.classList.remove('d-none');
         }
     }

@@ -44,8 +44,10 @@ def test_compute_coverage_basic():
     assert patient.coverage_pct < 100
     # Should have coverage_stats
     assert patient.coverage_stats is not None
-    assert patient.coverage_stats["verbatim_pct"] > 0
+    assert patient.coverage_stats["used_pct"] > 0
     assert patient.coverage_stats["unused_pct"] > 0
+    # used + unused should equal 100
+    assert abs(patient.coverage_stats["used_pct"] + patient.coverage_stats["unused_pct"] - 100.0) < 0.2
 
 
 def test_coverage_pct_none_when_no_content_text():
@@ -70,6 +72,7 @@ def test_coverage_pct_zero_when_nothing_used():
 
     compute_coverage(patient)
     assert patient.coverage_pct == 0.0
+    assert patient.coverage_stats["used_pct"] == 0.0
     assert patient.coverage_stats["unused_pct"] == 100.0
     assert patient.coverage_stats["inferred_fields"] == 0
 

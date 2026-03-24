@@ -1,50 +1,42 @@
-"""Compute coverage map and percentage for a patient's text.
+"""Compute coverage: what percentage of source document words were extracted.
 
-Coverage tracks which parts of the source text were used by extracted fields:
-- verbatim: text matched by source_snippets
-- unused: text not matched by any extracted field
-
-Tracks ALL content cells (not just freeform) so the overlay can highlight
-unused text across the entire document preview.
+Coverage tracks ALL content cells in the document (not just freeform rows).
+- Words matched by source_snippets from HIGH or MEDIUM confidence fields count as "used"
+- LOW confidence (inferred) fields don't appear in source text, so don't count
+- Everything else is "unused" — text that no field extracted from
 """
 from models import PatientBlock
 
-# Section header rows — excluded from coverage (they're just labels)
+# Section header rows — excluded (they're just labels like "Patient Details", "Staging & Diagnosis(g)")
 _HEADER_ROWS = {0, 2, 4, 6}
 
 
 def _merge_spans(spans: list[dict]) -> list[dict]:
-    """Flatten spans into non-overlapping regions. Verbatim takes priority over unused."""
+    """Flatten spans into non-overlapping regions. Used takes priority over unused."""
     if not spans:
         return []
 
-    # Find the total range
     max_end = max(s["end"] for s in spans)
-
-    # Build a character-level map: each position is "verbatim" or "unused"
-    # Verbatim wins over unused when they overlap
-    char_type = ["unused"] * max_end
-    for span in spans:
-        if span.get("type") == "verbatim" or span.get("used"):
-            for i in range(span["start"], min(span["end"], max_end)):
-                char_type[i] = "verbatim"
-
-    # Collapse runs into spans
-    if not char_type:
+    if max_end <= 0:
         return []
 
+    # Build character-level map: "used" wins over "unused" when they overlap
+    char_used = [False] * max_end
+    for span in spans:
+        if span.get("used"):
+            for i in range(span["start"], min(span["end"], max_end)):
+                char_used[i] = True
+
+    # Collapse runs into spans
     result = []
-    cur_type = char_type[0]
+    cur_used = char_used[0]
     cur_start = 0
-    for i in range(1, len(char_type)):
-        if char_type[i] != cur_type:
-            is_used = cur_type == "verbatim"
-            result.append({"start": cur_start, "end": i, "used": is_used, "type": cur_type})
-            cur_type = char_type[i]
+    for i in range(1, len(char_used)):
+        if char_used[i] != cur_used:
+            result.append({"start": cur_start, "end": i, "used": cur_used})
+            cur_used = char_used[i]
             cur_start = i
-    # Final span
-    is_used = cur_type == "verbatim"
-    result.append({"start": cur_start, "end": len(char_type), "used": is_used, "type": cur_type})
+    result.append({"start": cur_start, "end": len(char_used), "used": cur_used})
 
     return result
 
@@ -52,13 +44,14 @@ def _merge_spans(spans: list[dict]) -> list[dict]:
 def compute_coverage(patient: PatientBlock) -> None:
     """Compute coverage_map and coverage stats for a patient.
 
-    Sets patient.coverage_map, patient.coverage_pct, and
-    patient.coverage_stats in-place.
+    Counts all words across all content cells. Fields with source_snippets
+    (structured_verbatim or freeform_verbatim) mark those character ranges as used.
+    Freeform_inferred fields are counted separately — they don't appear in source.
     """
     if not patient.raw_cells:
         return
 
-    # Track ALL content cells (skip section headers which are just labels)
+    # All content cells (skip section headers which are just labels)
     content_cells = [c for c in patient.raw_cells
                      if c["row"] not in _HEADER_ROWS and c.get("text", "").strip()]
 
@@ -77,20 +70,23 @@ def compute_coverage(patient: PatientBlock) -> None:
         key = f"{cell['row']},{cell['col']}"
         text_len = len(cell.get("text", ""))
         if text_len > 0:
-            coverage_map[key] = [{"start": 0, "end": text_len, "used": False, "type": "unused"}]
+            coverage_map[key] = [{"start": 0, "end": text_len, "used": False}]
 
-    # Mark spans from extracted source_snippets
+    # Count inferred fields (low confidence — not in source text)
     inferred_count = 0
 
+    # Mark used spans from source_snippets of HIGH and MEDIUM confidence fields
     for group_name, fields in patient.extractions.items():
         for field_key, fr in fields.items():
             if fr.value is None:
                 continue
 
+            # Low confidence = inferred by LLM, not in source → doesn't count as coverage
             if fr.confidence_basis == "freeform_inferred":
                 inferred_count += 1
                 continue
 
+            # Need both source_snippet and source_cell to mark text as used
             if not fr.source_snippet or not fr.source_cell:
                 continue
 
@@ -108,7 +104,7 @@ def compute_coverage(patient: PatientBlock) -> None:
             if not cell_text:
                 continue
 
-            # Find all occurrences of source_snippet in cell text
+            # Find all occurrences of source_snippet in cell text and mark as used
             snippet_lower = fr.source_snippet.lower()
             text_lower = cell_text.lower()
             start = 0
@@ -117,36 +113,33 @@ def compute_coverage(patient: PatientBlock) -> None:
                 if idx == -1:
                     break
                 end = idx + len(fr.source_snippet)
-                coverage_map[cell_key].append({
-                    "start": idx, "end": end,
-                    "used": True, "type": "verbatim",
-                })
+                coverage_map[cell_key].append({"start": idx, "end": end, "used": True})
                 start = idx + 1
 
-    # Merge spans per cell
+    # Merge spans per cell (flatten overlaps)
     for key in coverage_map:
         coverage_map[key] = _merge_spans(coverage_map[key])
 
     patient.coverage_map = coverage_map
 
-    # Compute stats
-    total_verbatim = 0
+    # Compute stats from merged spans
+    total_used = 0
     total_unused = 0
     for spans in coverage_map.values():
         for span in spans:
             length = span["end"] - span["start"]
-            if span.get("type") == "verbatim":
-                total_verbatim += length
+            if span["used"]:
+                total_used += length
             else:
                 total_unused += length
 
-    verbatim_pct = round(total_verbatim / total_chars * 100, 1) if total_chars > 0 else 0.0
+    used_pct = round(total_used / total_chars * 100, 1) if total_chars > 0 else 0.0
     unused_pct = round(total_unused / total_chars * 100, 1) if total_chars > 0 else 0.0
-    patient.coverage_pct = verbatim_pct
+    patient.coverage_pct = used_pct
 
     patient.coverage_stats = {
-        "verbatim_pct": verbatim_pct,
-        "inferred_fields": inferred_count,
-        "unused_pct": unused_pct,
+        "used_pct": used_pct,         # % of source text matched by extracted fields (high+medium)
+        "unused_pct": unused_pct,     # % of source text not matched by any field
+        "inferred_fields": inferred_count,  # number of fields inferred (not in source)
         "total_chars": total_chars,
     }

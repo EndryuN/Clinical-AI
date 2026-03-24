@@ -1,15 +1,16 @@
-"""Compute coverage map and percentage for a patient's freeform text.
+"""Compute coverage map and percentage for a patient's text.
 
-Coverage tracks three categories of freeform text:
-- verbatim: text matched by source_snippets from freeform_verbatim fields
-- inferred: text associated with freeform_inferred fields (LLM reformulated)
+Coverage tracks which parts of the source text were used by extracted fields:
+- verbatim: text matched by source_snippets
 - unused: text not matched by any extracted field
+
+Tracks ALL content cells (not just freeform) so the overlay can highlight
+unused text across the entire document preview.
 """
 from models import PatientBlock
 
-# Freeform content rows (not headers): clinical details text (5) and MDT outcome text (7)
-# Rows 4 and 6 are section headers ("Clinical Details(f):", "MDT Outcome(h)")
-_FREEFORM_ROWS = {5, 7}
+# Section header rows — excluded from coverage (they're just labels)
+_HEADER_ROWS = {0, 2, 4, 6}
 
 
 def _merge_spans(spans: list[dict]) -> list[dict]:
@@ -48,35 +49,35 @@ def compute_coverage(patient: PatientBlock) -> None:
     if not patient.raw_cells:
         return
 
-    freeform_cells = [c for c in patient.raw_cells if c["row"] in _FREEFORM_ROWS]
+    # Track ALL content cells (skip section headers which are just labels)
+    content_cells = [c for c in patient.raw_cells
+                     if c["row"] not in _HEADER_ROWS and c.get("text", "").strip()]
 
-    if not freeform_cells:
+    if not content_cells:
         patient.coverage_pct = None
         return
 
-    total_chars = sum(len(c.get("text", "")) for c in freeform_cells)
+    total_chars = sum(len(c.get("text", "")) for c in content_cells)
     if total_chars == 0:
         patient.coverage_pct = None
         return
 
-    # Initialise all freeform cell spans as unused
+    # Initialise all content cell spans as unused
     coverage_map: dict[str, list[dict]] = {}
-    for cell in freeform_cells:
+    for cell in content_cells:
         key = f"{cell['row']},{cell['col']}"
         text_len = len(cell.get("text", ""))
         if text_len > 0:
             coverage_map[key] = [{"start": 0, "end": text_len, "used": False, "type": "unused"}]
 
     # Mark spans from extracted source_snippets
-    verbatim_chars = 0
-    inferred_count = 0  # fields inferred (no verbatim match)
+    inferred_count = 0
 
     for group_name, fields in patient.extractions.items():
         for field_key, fr in fields.items():
             if fr.value is None:
                 continue
 
-            # Count inferred fields (LLM reformulated, no verbatim source)
             if fr.confidence_basis == "freeform_inferred":
                 inferred_count += 1
                 continue
@@ -90,7 +91,7 @@ def compute_coverage(patient: PatientBlock) -> None:
 
             # Find the matching cell text
             cell_text = ""
-            for cell in freeform_cells:
+            for cell in content_cells:
                 if cell["row"] == fr.source_cell["row"] and cell["col"] == fr.source_cell["col"]:
                     cell_text = cell.get("text", "")
                     break
@@ -111,7 +112,6 @@ def compute_coverage(patient: PatientBlock) -> None:
                     "start": idx, "end": end,
                     "used": True, "type": "verbatim",
                 })
-                verbatim_chars += end - idx
                 start = idx + 1
 
     # Merge spans per cell
@@ -120,7 +120,7 @@ def compute_coverage(patient: PatientBlock) -> None:
 
     patient.coverage_map = coverage_map
 
-    # Recount after merge (dedup overlaps)
+    # Compute stats
     total_verbatim = 0
     total_unused = 0
     for spans in coverage_map.values():
@@ -133,9 +133,8 @@ def compute_coverage(patient: PatientBlock) -> None:
 
     verbatim_pct = round(total_verbatim / total_chars * 100, 1) if total_chars > 0 else 0.0
     unused_pct = round(total_unused / total_chars * 100, 1) if total_chars > 0 else 0.0
-    patient.coverage_pct = verbatim_pct  # backward compat
+    patient.coverage_pct = verbatim_pct
 
-    # Store detailed stats for UI
     patient.coverage_stats = {
         "verbatim_pct": verbatim_pct,
         "inferred_fields": inferred_count,

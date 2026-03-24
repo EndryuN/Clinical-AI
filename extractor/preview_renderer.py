@@ -237,6 +237,8 @@ def render_patient_preview(patient: PatientBlock, out_dir: str) -> dict:
     # --- Section 1: Meeting Date banner ---
     draw.rectangle([0, y, IMG_WIDTH - 1, y + meeting_h - 1], fill=_MEETING_BG, outline=_BORDER)
     draw.text((CELL_PADDING, y + 6), meeting_text, font=font_bold, fill=_MEETING_TEXT)
+    # Store coord for synthetic MDT header cell (row=-1) so source highlighting works
+    coords['-1,0'] = {'x': 0, 'y': y, 'w': IMG_WIDTH, 'h': meeting_h}
     y += meeting_h
 
     # --- Section 2+3: Patient Details | Cancer Target Dates ---

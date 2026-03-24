@@ -236,6 +236,8 @@ def parse_docx(file_path: str) -> list[PatientBlock]:
         if mdt_date or cancer_type:
             prefix = f"Cancer Type: {cancer_type}\nMDT Meeting Date: {mdt_date}"
             raw_text = f"{prefix}\n\n{raw_text}"
+            # Add as synthetic cell so source_cell tracking can find MDT date
+            raw_cells.insert(0, {"row": -1, "col": 0, "text": prefix})
 
         patients.append(PatientBlock(
             id=patient_id,

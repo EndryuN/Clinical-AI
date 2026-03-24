@@ -51,11 +51,12 @@ def test_compute_coverage_basic():
     assert patient.coverage_stats["unused_pct"] > 0
 
 
-def test_coverage_pct_none_when_no_freeform_text():
+def test_coverage_pct_none_when_no_content_text():
+    """Coverage is None when there are only header rows (no content cells)."""
     patient = PatientBlock(id="test")
     patient.raw_cells = [
-        {"row": 0, "col": 0, "text": "Header only"},
-        {"row": 1, "col": 0, "text": "Structured data"},
+        {"row": 0, "col": 0, "text": "Section Header"},  # header row, excluded
+        {"row": 2, "col": 0, "text": "Another Header"},   # header row, excluded
     ]
     patient.extractions = {}
 

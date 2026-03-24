@@ -124,117 +124,226 @@ def upload():
 
 
 def _import_excel(file_path: str) -> list:
-    """Import a previously exported Excel file back into PatientBlock objects."""
+    """Import a previously exported Excel file back into PatientBlock objects.
+    Supports both new format (with RawCells sheet + confidence_basis column)
+    and legacy format (with old confidence column only).
+    """
+    import os, time
     from openpyxl import load_workbook
 
     all_fields = get_all_fields()
     groups = get_groups()
 
-    # Build reverse lookup: excel_column → (group_name, field_key, field_type)
-    col_to_field = {}
-    for field in all_fields:
-        col_to_field[field['excel_column']] = (field['group_name'], field['key'], field['type'])
-
     wb = load_workbook(file_path)
 
-    # Load Metadata sheet if present (written by new exporter)
-    meta_lookup = {}
+    # ── Detect format ──
+    has_rawcells = "RawCells" in wb.sheetnames
+    is_new_format = False
+
+    # ── Read Metadata sheet ──
+    meta_lookup = {}   # (unique_id_or_pid, field_key) -> dict
+    coverage_lookup = {}  # unique_id -> float (coverage_pct)
+
     if "Metadata" in wb.sheetnames:
         ws_meta = wb["Metadata"]
-        # Row 1 might be SOURCE_FILE
+        # Row 1 = SOURCE_FILE
         if ws_meta.cell(row=1, column=1).value == "SOURCE_FILE":
             session.file_name = ws_meta.cell(row=1, column=2).value or ""
-        
-        # Data starts from row 3 if Row 1 is SOURCE_FILE, else row 2
-        start_row = 3 if ws_meta.cell(row=1, column=1).value == "SOURCE_FILE" else 2
-        for row in ws_meta.iter_rows(min_row=start_row, values_only=True):
-            pid, fkey, conf, reason, *extra = row
-            source_cell = None
-            source_snippet = None
-            if len(extra) >= 2:
-                source_cell_json, source_snippet = extra[0:2]
-                if source_cell_json:
-                    try:
-                        source_cell = json.loads(source_cell_json)
-                    except:
-                        pass
-            
-            if pid and fkey:
-                meta_lookup[(str(pid), str(fkey))] = {
-                    "confidence": conf or 'high',
-                    "reason": reason or '',
-                    "source_cell": source_cell,
-                    "source_snippet": source_snippet
-                }
+        # Row 2 = headers — read by name
+        header_row = [ws_meta.cell(row=2, column=c).value for c in range(1, ws_meta.max_column + 1)]
+        header_row = [h for h in header_row if h]
 
+        def _col(name):
+            try:
+                return header_row.index(name)
+            except ValueError:
+                return None
+
+        def _col_first(*names):
+            for n in names:
+                c = _col(n)
+                if c is not None:
+                    return c
+            return None
+
+        is_new_format = 'confidence_basis' in header_row
+
+        pid_col    = _col_first('unique_id', 'patient_id')
+        if pid_col is None:
+            pid_col = 0
+        fkey_col   = _col_first('field_key')
+        if fkey_col is None:
+            fkey_col = 1
+        cbasis_col = _col('confidence_basis')
+        conf_col   = _col('confidence')
+        reason_col = _col('reason')
+        scrow_col  = _col('source_cell_row')
+        sccol_col  = _col('source_cell_col')
+        snip_col   = _col('source_snippet')
+        edited_col = _col('edited')
+        orig_col   = _col('original_value')
+        cpct_col   = _col('coverage_pct')
+        # Legacy: source_cell as JSON
+        sc_json_col = _col('source_cell')
+
+        _LEGACY_MAP = {'high': 'structured_verbatim', 'medium': 'freeform_verbatim',
+                       'low': 'freeform_inferred', 'none': 'absent'}
+
+        for row in ws_meta.iter_rows(min_row=3, values_only=True):
+            row = list(row)
+            pid = str(row[pid_col]) if pid_col is not None and len(row) > pid_col and row[pid_col] else None
+            fkey = str(row[fkey_col]) if fkey_col is not None and len(row) > fkey_col and row[fkey_col] else None
+            if not pid or not fkey:
+                continue
+
+            if is_new_format and cbasis_col is not None:
+                cb = row[cbasis_col] or 'absent'
+            elif conf_col is not None:
+                cb = _LEGACY_MAP.get(str(row[conf_col] or ''), 'absent')
+            else:
+                cb = 'structured_verbatim'
+
+            source_cell = None
+            if scrow_col is not None and sccol_col is not None:
+                sc_r = row[scrow_col] if len(row) > scrow_col else None
+                sc_c = row[sccol_col] if len(row) > sccol_col else None
+                if sc_r is not None and sc_c is not None:
+                    source_cell = {"row": int(sc_r), "col": int(sc_c)}
+            elif sc_json_col is not None and len(row) > sc_json_col and row[sc_json_col]:
+                try:
+                    source_cell = json.loads(row[sc_json_col])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            snippet = None
+            if snip_col is not None and len(row) > snip_col and row[snip_col]:
+                snippet = str(row[snip_col])
+
+            meta_lookup[(pid, fkey)] = {
+                "confidence_basis": cb,
+                "reason": str(row[reason_col]) if reason_col is not None and len(row) > reason_col and row[reason_col] else '',
+                "source_cell": source_cell,
+                "source_snippet": snippet,
+                "edited": str(row[edited_col]).lower() == 'true' if edited_col is not None and len(row) > edited_col else False,
+                "original_value": str(row[orig_col]) if orig_col is not None and len(row) > orig_col and row[orig_col] else None,
+            }
+            if cpct_col is not None and len(row) > cpct_col and row[cpct_col] is not None and pid not in coverage_lookup:
+                try:
+                    coverage_lookup[pid] = float(row[cpct_col])
+                except (ValueError, TypeError):
+                    pass
+
+    # ── Read RawCells sheet ──
+    rawcells_lookup = {}
+    coverage_map_lookup = {}
+
+    if has_rawcells:
+        ws_rc = wb["RawCells"]
+        rc_headers = [ws_rc.cell(row=1, column=c).value for c in range(1, 6)]
+        def _rccol(name):
+            try: return rc_headers.index(name)
+            except ValueError: return None
+        uid_c = _rccol('unique_id') or 0
+        row_c = _rccol('row') or 1
+        col_c = _rccol('col') or 2
+        txt_c = _rccol('text') or 3
+        cjson_c = _rccol('coverage_json') or 4
+
+        for row in ws_rc.iter_rows(min_row=2, values_only=True):
+            row = list(row)
+            pid = str(row[uid_c]) if row[uid_c] else None
+            if not pid:
+                continue
+            rawcells_lookup.setdefault(pid, []).append({
+                "row": int(row[row_c] or 0),
+                "col": int(row[col_c] or 0),
+                "text": str(row[txt_c] or ''),
+            })
+            if row[cjson_c]:
+                try:
+                    spans = json.loads(row[cjson_c])
+                    cell_key = f"{int(row[row_c] or 0)},{int(row[col_c] or 0)}"
+                    coverage_map_lookup.setdefault(pid, {})[cell_key] = spans
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+    # ── Read Prototype V1 ──
     ws = wb.active
+    has_uid_col = ws.cell(row=1, column=1).value == "unique_id"
+    field_offset = 1 if has_uid_col else 0
 
     patients = []
     for row_idx in range(2, ws.max_row + 1):
-        # Check if row is a real patient (must have MRN col 3 or NHS number col 4)
-        mrn_val = ws.cell(row=row_idx, column=3).value
-        nhs_val = ws.cell(row=row_idx, column=4).value
+        mrn_schema_col = next((f['excel_column'] for f in all_fields if f['key'] == 'mrn'), 3)
+        nhs_schema_col = next((f['excel_column'] for f in all_fields if f['key'] == 'nhs_number'), 4)
+        mrn_val = ws.cell(row=row_idx, column=mrn_schema_col + field_offset).value
+        nhs_val = ws.cell(row=row_idx, column=nhs_schema_col + field_offset).value
         if not mrn_val and not nhs_val:
             continue
 
-        # Determine patient_id early (needed for meta_lookup)
-        mrn_col = next((f['excel_column'] for f in all_fields if f['key'] == 'mrn'), None)
-        mrn_cell_val = ws.cell(row=row_idx, column=mrn_col).value if mrn_col else None
-        patient_id = str(mrn_cell_val).strip() if mrn_cell_val else f"patient_{row_idx - 1:03d}"
+        unique_id = str(ws.cell(row=row_idx, column=1).value or '').strip() if has_uid_col else ''
+        patient_id = str(mrn_val).strip() if mrn_val else f"patient_{row_idx - 1:03d}"
+        lookup_key = unique_id or patient_id
 
-        # Build extractions from Excel data
         extractions = {}
         for group in groups:
             group_fields = {}
             for field in group['fields']:
-                col = field['excel_column']
+                col = field['excel_column'] + field_offset
                 cell_value = ws.cell(row=row_idx, column=col).value
                 if cell_value is not None:
                     value = str(cell_value).strip()
-                    meta = meta_lookup.get((patient_id, field['key']), {})
-                    cb = meta.get('confidence_basis') or meta.get('confidence', 'structured_verbatim')
-                    # Map legacy confidence string to basis if needed
-                    if cb in ('high', 'medium', 'low', 'none'):
-                        cb = {'high': 'structured_verbatim', 'medium': 'freeform_verbatim',
-                              'low': 'freeform_inferred', 'none': 'absent'}[cb]
+                    meta = meta_lookup.get((lookup_key, field['key']),
+                           meta_lookup.get((patient_id, field['key']), {}))
                     group_fields[field['key']] = FieldResult(
                         value=value,
-                        confidence_basis=cb,
+                        confidence_basis=meta.get('confidence_basis', 'structured_verbatim'),
                         reason=meta.get('reason', ''),
                         source_cell=meta.get('source_cell'),
-                        source_snippet=meta.get('source_snippet')
+                        source_snippet=meta.get('source_snippet'),
+                        edited=meta.get('edited', False),
+                        original_value=meta.get('original_value'),
                     )
                 else:
                     group_fields[field['key']] = FieldResult(value=None, confidence_basis='absent')
             extractions[group['name']] = group_fields
 
-        # Get patient identifiers from Demographics fields
-        initials = ""
-        nhs_number = ""
-
         demo = extractions.get("Demographics", {})
-        if "initials" in demo and demo["initials"].value:
-            initials = demo["initials"].value
-        if "nhs_number" in demo and demo["nhs_number"].value:
-            nhs_number = demo["nhs_number"].value
-        if "mrn" in demo and demo["mrn"].value:
-            patient_id = demo["mrn"].value
+        initials = demo.get("initials", FieldResult()).value or ''
+        nhs_number = demo.get("nhs_number", FieldResult()).value or ''
+        mrn = demo.get("mrn", FieldResult()).value or patient_id
 
-        # Derive cancer type from biopsy result for the raw_text header
-        biopsy = extractions.get("Histology", {}).get("biopsy_result")
-        cancer_type = ""
-        if biopsy and biopsy.value and biopsy.value.lower() not in ('missing', 'n/a', ''):
-            cancer_type = biopsy.value.split(',')[0].strip().title()
+        raw_cells = rawcells_lookup.get(lookup_key, [])
+        c_map = coverage_map_lookup.get(lookup_key, {})
+        c_pct = coverage_lookup.get(lookup_key)
 
         patients.append(PatientBlock(
-            id=patient_id,
+            id=mrn,
+            unique_id=unique_id,
             initials=initials,
             nhs_number=nhs_number,
-            raw_text=f"Diagnosis: {cancer_type.upper()}\n(imported from Excel)" if cancer_type else "(imported from Excel)",
+            raw_text="(imported from Excel)",
             extractions=extractions,
+            raw_cells=raw_cells,
+            coverage_map=c_map,
+            coverage_pct=c_pct,
         ))
 
     wb.close()
+
+    # ── Regenerate preview PNGs from raw_cells ──
+    if has_rawcells and patients:
+        try:
+            ts = str(int(time.time()))
+            preview_dir = os.path.join(app.static_folder, 'previews', ts)
+            os.makedirs(preview_dir, exist_ok=True)
+            for p in patients:
+                if p.raw_cells:
+                    render_patient_preview(p, preview_dir)
+            session.file_name = f"{ts}_imported.xlsx"
+        except Exception as preview_err:
+            log_event('preview_render_error', error=str(preview_err))
+
     return patients
 
 

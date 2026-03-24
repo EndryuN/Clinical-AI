@@ -49,9 +49,8 @@ def test_excel_exports_metadata_sheet():
         os.unlink(path)
 
 
-@pytest.mark.skip(reason="Requires _import_excel update (Task 8) for new column layout")
 def test_excel_round_trip_restores_confidence_and_reason():
-    """Export then re-import — confidence and reason must survive."""
+    """Export then re-import — confidence_basis and reason must survive."""
     import sys
     import os as _os
     sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
@@ -76,9 +75,9 @@ def test_excel_round_trip_restores_confidence_and_reason():
         write_excel([patient], path)
         reimported = _import_excel(path)
         demo = reimported[0].extractions.get("Demographics", {})
-        assert demo["nhs_number"].confidence == "medium"
+        assert demo["nhs_number"].confidence_basis == "freeform_verbatim"
         assert "LLM" in (demo["nhs_number"].reason or "")
-        assert demo["dob"].confidence == "high"
+        assert demo["dob"].confidence_basis == "structured_verbatim"
     finally:
         os.unlink(path)
 
@@ -222,3 +221,23 @@ def test_excel_metadata_sheet_has_confidence_basis_column():
         wb.close()
     finally:
         os.unlink(path)
+
+
+def test_excel_round_trip_new_format_restores_rawcells_and_confidence_basis(tmp_path):
+    import sys, os as _os
+    sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+    from app import _import_excel
+    patient = _make_patient_with_rawcells()
+    path = str(tmp_path / "test.xlsx")
+    write_excel([patient], path)
+    reimported = _import_excel(path)
+    assert len(reimported) == 1
+    p = reimported[0]
+    # unique_id restored
+    assert p.unique_id == "07032025_AO_M_9990001"
+    # raw_cells restored
+    assert len(p.raw_cells) == 3
+    # confidence_basis restored
+    demo = p.extractions.get("Demographics", {})
+    assert demo["nhs_number"].confidence_basis == "freeform_verbatim"
+    assert demo["mrn"].confidence_basis == "structured_verbatim"

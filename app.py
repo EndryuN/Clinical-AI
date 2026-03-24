@@ -435,15 +435,17 @@ def _run_extraction(patient_limit=None, concurrency=1):
                 session.progress['current_patient'] = session.progress['llm_complete']
                 session.progress['completed_patients'].append({
                     "id": patient.id, "initials": patient.initials,
-                    "confidence_summary": conf, "seconds": 0,
+                    "confidence_summary": conf, "seconds": 0, "llm_seconds": 0,
                 })
             return
 
-        start_time = time.time()
+        queued_time = time.time()
+        llm_processing_time = 0.0  # actual LLM time (excludes queue wait)
         session.progress['active_patients'][patient.id] = {
             "initials": patient.initials,
             "group": patient_llm_groups[0]['name'],
-            "start": start_time,
+            "start": queued_time,
+            "llm_start": None,  # set when first semaphore acquired
             "status": "queued",
             "has_context": bool(get_context_for_group(patient_llm_groups[0]['name'])),
             "groups_done": 0,
@@ -461,7 +463,11 @@ def _run_extraction(patient_limit=None, concurrency=1):
             with llm_semaphore:
                 if session.stop_requested:
                     break
-                session.progress['active_patients'][patient.id]['status'] = 'running'
+                group_start = time.time()
+                ap = session.progress['active_patients'][patient.id]
+                ap['status'] = 'running'
+                if ap['llm_start'] is None:
+                    ap['llm_start'] = group_start
                 try:
                     system_prompt, user_prompt = build_prompt(patient.raw_text, group)
                     raw_response = generate(user_prompt, system_prompt)
@@ -474,22 +480,27 @@ def _run_extraction(patient_limit=None, concurrency=1):
                             patient.extractions[group['name']][key] = llm_fr
                 except Exception as e:
                     log_event('llm_extraction_error', patient_id=patient.id, group=group['name'], error=str(e))
+                llm_processing_time += time.time() - group_start
             session.progress['active_patients'][patient.id]['groups_done'] += 1
 
         session.progress['active_patients'].pop(patient.id, None)
 
-        elapsed = round(time.time() - start_time, 1)
+        llm_seconds = round(llm_processing_time, 1)
         conf = _confidence_summary(patient)
         with _counter_lock:
             session.progress['llm_complete'] += 1
             session.progress['current_patient'] = session.progress['llm_complete']
-            session.progress['patient_times'].append(elapsed)
+            session.progress['patient_times'].append(llm_seconds)
             session.progress['average_seconds'] = round(
                 sum(session.progress['patient_times']) / len(session.progress['patient_times']), 1
             )
+            # Throughput: wall time elapsed / patients done
+            wall_elapsed = time.time() - session.progress['start_time']
+            completed_count = session.progress['llm_complete']
+            session.progress['throughput_seconds'] = round(wall_elapsed / completed_count, 1) if completed_count else 0
             session.progress['completed_patients'].append({
                 "id": patient.id, "initials": patient.initials,
-                "confidence_summary": conf, "seconds": elapsed,
+                "confidence_summary": conf, "seconds": llm_seconds, "llm_seconds": llm_seconds,
             })
 
     with ThreadPoolExecutor(max_workers=max(1, min(concurrency, 3))) as ex:
@@ -522,6 +533,7 @@ def progress():
                 "active_patients": session.progress.get('active_patients', {}),
                 "completed_patients": session.progress.get('completed_patients', []),
                 "average_seconds": round(session.progress.get('average_seconds', 0), 1),
+                "throughput_seconds": round(session.progress.get('throughput_seconds', 0), 1),
                 "start_time": session.progress.get('start_time', 0),
                 "status": session.status
             }

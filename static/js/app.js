@@ -204,7 +204,8 @@ function listenProgress() {
             if (completeSection) completeSection.classList.remove('d-none');
             if (completeSummary) {
                 const statusText = data.status === 'stopped' ? 'Extraction stopped.' : 'Extraction complete.';
-                completeSummary.textContent = `${statusText} ${data.current_patient} / ${data.total} patients processed. Average speed: ${data.average_seconds}s per patient.`;
+                const throughput = data.throughput_seconds || data.average_seconds || 0;
+                completeSummary.textContent = `${statusText} ${data.current_patient} / ${data.total} patients processed. ${throughput}s avg per patient.`;
             }
             return;
         }
@@ -224,8 +225,21 @@ function listenProgress() {
             progressText.textContent = `${donePatientsCount} / ${total} patients`;
         }
 
-        if (averageSpeedEl && data.average_seconds > 0) {
-            averageSpeedEl.textContent = `${data.average_seconds}s / patient`;
+        // Average speed: show throughput (wall time / completed) when multithreaded
+        if (averageSpeedEl) {
+            const throughput = data.throughput_seconds || 0;
+            const avgLlm = data.average_seconds || 0;
+            const activeCount = Object.keys(data.active_patients || {}).length;
+            if (throughput > 0) {
+                // Show throughput rate (accounts for parallelism)
+                averageSpeedEl.textContent = `${throughput}s / patient`;
+                // If running parallel, show LLM time in parentheses
+                if (activeCount > 1 && avgLlm > 0 && avgLlm !== throughput) {
+                    averageSpeedEl.textContent += ` (${avgLlm}s LLM)`;
+                }
+            } else if (avgLlm > 0) {
+                averageSpeedEl.textContent = `${avgLlm}s / patient`;
+            }
         }
 
         // Render active patient cards — each with its own group progress bar
@@ -235,13 +249,15 @@ function listenProgress() {
                 activePatientsList.innerHTML = '<span class="text-muted small">Waiting...</span>';
             } else {
                 activePatientsList.innerHTML = active.map(([id, p]) => {
-                    const elapsed = Math.floor((Date.now() - (p.start * 1000)) / 1000);
+                    const isQueued = p.status === 'queued';
+                    // Timer: show LLM processing time (from llm_start), not queue time
+                    const timerBase = (!isQueued && p.llm_start) ? p.llm_start : p.start;
+                    const elapsed = Math.floor((Date.now() - (timerBase * 1000)) / 1000);
                     const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
                     const secs = (elapsed % 60).toString().padStart(2, '0');
-                    const isQueued = p.status === 'queued';
                     const accentColor = isQueued ? '#4b5563' : '#0d6efd';
                     const timerColor = isQueued ? '#6b7280' : '#f59e0b';
-                    const groupLabel = isQueued ? `⏳ ${p.group}` : p.group || 'Starting...';
+                    const groupLabel = isQueued ? `Queued` : p.group || 'Starting...';
                     const contextBadge = (!isQueued && p.has_context)
                         ? `<span style="font-size:9px; background:#1e3a5f; color:#60a5fa; border:1px solid #2563eb; border-radius:3px; padding:1px 4px; margin-left:5px; vertical-align:middle;">G049</span>`
                         : '';
@@ -249,10 +265,16 @@ function listenProgress() {
                     const groupsTotal = p.groups_total || 1;
                     const groupPct = Math.round(groupsDone / groupsTotal * 100);
                     const miniBarColor = isQueued ? '#374151' : '#2563eb';
+                    const statusLabel = isQueued
+                        ? `<span style="font-size:9px; color:#6b7280;">QUEUED</span>`
+                        : `<span style="font-size:9px; color:#60a5fa;">${groupsDone}/${groupsTotal} groups</span>`;
                     return `<div style="background:#111827; border:1px solid ${accentColor}; border-radius:6px; padding:8px 12px; min-width:160px; opacity:${isQueued ? '0.7' : '1'};">` +
                            `<div style="font-size:12px; font-weight:700; color:#f0f0f0; letter-spacing:0.5px;">${p.initials || 'Patient'}</div>` +
                            `<div style="font-size:10px; color:#9ca3af; margin-top:2px;">${groupLabel}${contextBadge}</div>` +
-                           `<div style="font-size:14px; font-weight:700; color:${timerColor}; font-family:monospace; margin-top:4px;">${mins}:${secs}</div>` +
+                           `<div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:4px;">` +
+                           `<span style="font-size:14px; font-weight:700; color:${timerColor}; font-family:monospace;">${mins}:${secs}</span>` +
+                           `${statusLabel}` +
+                           `</div>` +
                            `<div style="margin-top:6px; background:#1f2937; border-radius:3px; height:3px; overflow:hidden;">` +
                            `<div style="width:${groupPct}%; height:100%; background:${miniBarColor}; transition:width 0.5s ease;"></div>` +
                            `</div>` +
@@ -267,7 +289,8 @@ function listenProgress() {
             if (log) {
                 log.innerHTML = data.completed_patients.slice().reverse().map(p => {
                     const c = p.confidence_summary || {};
-                    const timeStr = p.seconds ? `(${p.seconds}s)` : '';
+                    const llmTime = p.llm_seconds || p.seconds || 0;
+                    const timeStr = llmTime ? `(${llmTime}s)` : '';
                     return `<div class="text-muted py-1 d-flex justify-content-between">` +
                         `<span>&#x2713; ${p.initials || p.id} &middot; ` +
                         `<span class="text-success">${c.high || 0} high</span> &middot; ` +

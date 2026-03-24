@@ -14,30 +14,39 @@ _HEADER_ROWS = {0, 2, 4, 6}
 
 
 def _merge_spans(spans: list[dict]) -> list[dict]:
-    """Sort spans, merge overlapping same-type spans, fill gaps as unused."""
+    """Flatten spans into non-overlapping regions. Verbatim takes priority over unused."""
     if not spans:
         return []
 
-    spans = sorted(spans, key=lambda s: s["start"])
+    # Find the total range
+    max_end = max(s["end"] for s in spans)
 
-    # Merge overlapping spans with same 'type' value
-    merged = [spans[0].copy()]
-    for span in spans[1:]:
-        last = merged[-1]
-        if span.get("type") == last.get("type") and span["start"] <= last["end"]:
-            last["end"] = max(last["end"], span["end"])
-        else:
-            merged.append(span.copy())
+    # Build a character-level map: each position is "verbatim" or "unused"
+    # Verbatim wins over unused when they overlap
+    char_type = ["unused"] * max_end
+    for span in spans:
+        if span.get("type") == "verbatim" or span.get("used"):
+            for i in range(span["start"], min(span["end"], max_end)):
+                char_type[i] = "verbatim"
 
-    # Fill gaps as unused
-    filled = []
-    for i, span in enumerate(merged):
-        if i > 0 and merged[i - 1]["end"] < span["start"]:
-            filled.append({"start": merged[i - 1]["end"], "end": span["start"],
-                           "used": False, "type": "unused"})
-        filled.append(span)
+    # Collapse runs into spans
+    if not char_type:
+        return []
 
-    return filled
+    result = []
+    cur_type = char_type[0]
+    cur_start = 0
+    for i in range(1, len(char_type)):
+        if char_type[i] != cur_type:
+            is_used = cur_type == "verbatim"
+            result.append({"start": cur_start, "end": i, "used": is_used, "type": cur_type})
+            cur_type = char_type[i]
+            cur_start = i
+    # Final span
+    is_used = cur_type == "verbatim"
+    result.append({"start": cur_start, "end": len(char_type), "used": is_used, "type": cur_type})
+
+    return result
 
 
 def compute_coverage(patient: PatientBlock) -> None:

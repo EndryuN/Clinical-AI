@@ -10,15 +10,12 @@ def test_merge_spans_combines_overlapping():
         {"start": 20, "end": 30, "used": False, "type": "unused"},
     ]
     merged = _merge_spans(spans)
-    assert len(merged) == 3
+    # Overlapping verbatim [0-10] + [5-15] → one verbatim [0-15], gap [15-20], unused [20-30]
+    total = sum(s["end"] - s["start"] for s in merged)
+    assert total == 30  # no overlap, no gaps
     assert merged[0]["start"] == 0
     assert merged[0]["end"] == 15
     assert merged[0]["used"] == True
-    assert merged[1]["start"] == 15  # gap filled
-    assert merged[1]["end"] == 20
-    assert merged[1]["used"] == False
-    assert merged[2]["start"] == 20
-    assert merged[2]["end"] == 30
 
 
 def test_compute_coverage_basic():

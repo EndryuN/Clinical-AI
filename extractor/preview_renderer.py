@@ -145,6 +145,21 @@ def render_patient_preview(patient: PatientBlock, out_dir: str) -> dict:
 
     # Section content from rows 1, 3, 5, 7
     patient_details_text = cell(1, 0)
+    # Replace full name with initials for privacy in preview
+    if patient.initials and patient_details_text:
+        lines = patient_details_text.split('\n')
+        cleaned = []
+        for line in lines:
+            stripped = line.strip()
+            # Skip lines that are the patient name (no colon prefix, not a number, not DOB/gender)
+            if (stripped and ':' not in stripped
+                    and not stripped[0].isdigit()
+                    and stripped.lower() not in ('male', 'female')
+                    and 'age' not in stripped.lower()):
+                cleaned.append(patient.initials)
+            else:
+                cleaned.append(line)
+        patient_details_text = '\n'.join(cleaned)
     cancer_dates_text = cell(1, 1) or cell(0, 1)  # fallback to header col 1 if row 1 has no col 1
 
     # Staging: combine all cols from row 3

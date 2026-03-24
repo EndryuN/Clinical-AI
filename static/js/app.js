@@ -891,10 +891,16 @@ function initCoverageToggle(coverageMap, coveragePct, coords, coverageStats) {
 function renderCoverageOverlay(show, coords) {
     const existing = document.getElementById('coverage-svg-overlay');
     if (existing) existing.remove();
-    if (!show || !_coverageMap || !coords) return;
+    if (!show || !_coverageMap || !coords) {
+        console.log('[coverage] skip:', {show, hasMap: !!_coverageMap, hasCoords: !!coords});
+        return;
+    }
 
     const previewImg = document.getElementById('preview-img');
-    if (!previewImg || previewImg.naturalWidth === 0) return;
+    if (!previewImg || previewImg.naturalWidth === 0) {
+        console.log('[coverage] image not ready:', {found: !!previewImg, natW: previewImg?.naturalWidth});
+        return;
+    }
 
     const natW = previewImg.naturalWidth;
     const natH = previewImg.naturalHeight;
@@ -907,10 +913,11 @@ function renderCoverageOverlay(show, coords) {
     svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;';
 
     let rectCount = 0;
+    console.log('[coverage] map keys:', Object.keys(_coverageMap), 'coord keys:', Object.keys(coords));
     for (const [cellKey, spans] of Object.entries(_coverageMap)) {
         if (!spans || spans.length === 0) continue;
         const cellCoord = coords[cellKey];
-        if (!cellCoord) continue;
+        if (!cellCoord) { console.log('[coverage] no coord for key:', cellKey); continue; }
 
         const unusedLen = spans.filter(s => !s.used).reduce((a, s) => a + (s.end - s.start), 0);
         const totalLen = spans.reduce((a, s) => a + (s.end - s.start), 0);
@@ -932,10 +939,13 @@ function renderCoverageOverlay(show, coords) {
         rectCount++;
     }
 
+    console.log('[coverage] drew', rectCount, 'rects');
     if (rectCount > 0) {
         const previewContainer = document.getElementById('preview-container');
         if (previewContainer) {
             previewContainer.appendChild(svg);
         }
+    } else {
+        console.log('[coverage] no rects to draw — all cells fully used or no coord matches');
     }
 }

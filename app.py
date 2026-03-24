@@ -21,7 +21,8 @@ from extractor.llm_client import (check_ollama, generate, get_backend, set_backe
 from extractor.prompt_builder import build_prompt, build_all_prompts
 from extractor.clinical_context import get_context_for_group
 from extractor.response_parser import parse_llm_response
-from extractor.regex_extractor import regex_extract
+from extractor.regex_extractor import regex_extract, assign_unique_id
+from extractor.coverage import compute_coverage
 from extractor.preview_renderer import render_patient_preview
 from export.excel_writer import write_excel
 from config import get_groups, get_all_fields
@@ -84,7 +85,7 @@ def upload():
                 "patients_detected": len(patients),
                 "imported": True,
                 "patient_list": [
-                    {"id": p.id, "initials": p.initials, "nhs_number": p.nhs_number}
+                    {"id": p.id, "unique_id": p.unique_id, "initials": p.initials, "nhs_number": p.nhs_number}
                     for p in patients
                 ]
             })
@@ -114,7 +115,7 @@ def upload():
                 "patients_detected": len(patients),
                 "imported": False,
                 "patient_list": [
-                    {"id": p.id, "initials": p.initials, "nhs_number": p.nhs_number}
+                    {"id": p.id, "unique_id": p.unique_id, "initials": p.initials, "nhs_number": p.nhs_number}
                     for p in patients
                 ]
             })
@@ -464,7 +465,7 @@ def _run_extraction(patient_limit=None, concurrency=1):
                 try:
                     system_prompt, user_prompt = build_prompt(patient.raw_text, group)
                     raw_response = generate(user_prompt, system_prompt)
-                    llm_results = parse_llm_response(raw_response, group)
+                    llm_results = parse_llm_response(raw_response, group, raw_cells=patient.raw_cells)
                     for key, llm_fr in llm_results.items():
                         current = patient.extractions[group['name']].get(key)
                         if current and current.value is None and llm_fr.value is not None:
@@ -493,6 +494,13 @@ def _run_extraction(patient_limit=None, concurrency=1):
 
     with ThreadPoolExecutor(max_workers=max(1, min(concurrency, 3))) as ex:
         list(ex.map(process_patient, patients_to_process))
+
+    # Assign unique_ids and compute coverage for all patients
+    for i, patient in enumerate(session.patients):
+        if not patient.unique_id:
+            assign_unique_id(patient, patient.extractions.get("Demographics", {}), row_index=i)
+        compute_coverage(patient)
+    _deduplicate_unique_ids(session.patients)
 
     session.status = 'complete' if not session.stop_requested else 'stopped'
     session.progress['phase'] = 'complete'
@@ -556,11 +564,13 @@ def get_patients():
         conf = _confidence_summary(p)
         result.append({
             "id": p.id,
+            "unique_id": p.unique_id,
             "initials": p.initials,
             "nhs_number": p.nhs_number,
             "gender": _get_field_value(p, "Demographics", "gender"),
             "cancer_type": ct,
-            "confidence_summary": conf
+            "confidence_summary": conf,
+            "coverage_pct": p.coverage_pct,
         })
 
     return jsonify({"patients": result})
@@ -578,6 +588,7 @@ def get_patient(patient_id):
             key: {
                 "value": fr.value,
                 "confidence": fr.confidence,
+                "confidence_basis": fr.confidence_basis,
                 "reason": fr.reason,
                 "edited": fr.edited,
                 "source_cell": fr.source_cell,
@@ -588,31 +599,41 @@ def get_patient(patient_id):
 
     return jsonify({
         "id": patient.id,
+        "unique_id": patient.unique_id,
         "initials": patient.initials,
         "nhs_number": patient.nhs_number,
         "raw_text": patient.raw_text,
         "raw_cells": patient.raw_cells,
-        "extractions": extractions
+        "extractions": extractions,
+        "coverage_map": patient.coverage_map,
+        "coverage_pct": patient.coverage_pct,
     })
 
 
 @app.route('/patient/<patient_id>/preview')
 def patient_preview(patient_id):
     """Return rendered image URL and cell coordinate map for the patient."""
-    patient = next((p for p in session.patients if p.id == patient_id), None)
+    patient = next(
+        (p for p in session.patients
+         if p.unique_id == patient_id or p.id == patient_id),
+        None
+    )
     if not patient:
         return jsonify({"error": "not found"}), 404
     if not session.file_name:
         return jsonify({"error": "no file"}), 404
     ts = session.file_name.split('_')[0]
-    json_path = os.path.join(app.static_folder, 'previews', ts, f'{patient.id}.json')
+    file_id = patient.unique_id if patient.unique_id else patient.id
+    json_path = os.path.join(app.static_folder, 'previews', ts, f'{file_id}.json')
     if not os.path.exists(json_path):
         return jsonify({"error": "preview not available"}), 404
     with open(json_path) as f:
         coords = json.load(f)
     return jsonify({
-        "image_url": f"/static/previews/{ts}/{patient.id}.png",
+        "image_url": f"/static/previews/{ts}/{file_id}.png",
         "coords": coords,
+        "coverage_map": patient.coverage_map,
+        "coverage_pct": patient.coverage_pct,
     })
 
 
@@ -637,6 +658,7 @@ def edit_field(patient_id):
         fr.original_value = old_value
     fr.value = new_value
     fr.edited = True
+    fr.confidence_basis = "edited"
 
     log_event('manual_edit',
               patient_id=patient.nhs_number,
@@ -668,7 +690,7 @@ def re_extract(patient_id):
                         if gaps > 0:
                             system_prompt, user_prompt = build_prompt(patient.raw_text, group)
                             raw_response = generate(user_prompt, system_prompt)
-                            llm_results = parse_llm_response(raw_response, group)
+                            llm_results = parse_llm_response(raw_response, group, raw_cells=patient.raw_cells)
                             for key, llm_fr in llm_results.items():
                                 if key in results and results[key].value is None and llm_fr.value is not None:
                                     _resolve_source_cell(patient, llm_fr)
@@ -941,7 +963,7 @@ def link_source():
 
 # Helper functions
 def _resolve_source_cell(patient, fr):
-    """Search patient.raw_cells for a cell containing fr.value and populate
+    """Search freeform cells (rows 4-7) for a cell containing fr.value and populate
     fr.source_cell/source_snippet.
 
     Note: uses substring matching on the normalised value — this is a best-effort
@@ -950,19 +972,37 @@ def _resolve_source_cell(patient, fr):
     """
     if not fr.value or not patient.raw_cells:
         return
-    for cell in patient.raw_cells:
+    freeform = [c for c in patient.raw_cells if c.get('row', 0) in {4, 5, 6, 7}]
+    for cell in freeform:
         if fr.value in cell["text"]:
             fr.source_cell = {"row": cell["row"], "col": cell["col"]}
-            if fr.source_snippet is None:     # don't overwrite LLM-provided annotation marker
-                fr.source_snippet = fr.value  # approximate — raw LLM token not available
+            if fr.source_snippet is None:
+                fr.source_snippet = fr.value[:200]
             return
 
 
 def _find_patient(patient_id: str):
     for p in session.patients:
-        if p.id == patient_id:
+        if p.unique_id == patient_id or p.id == patient_id:
             return p
     return None
+
+
+def _deduplicate_unique_ids(patients: list) -> None:
+    """Ensure unique_id is unique within the batch. Append _b, _c... for collisions."""
+    seen = {}
+    suffix_chars = 'bcdefghijklmnopqrstuvwxyz'
+    for patient in patients:
+        uid = patient.unique_id
+        if uid in seen:
+            for ch in suffix_chars:
+                candidate = f"{uid}_{ch}"
+                if candidate not in seen:
+                    patient.unique_id = candidate
+                    seen[candidate] = True
+                    break
+        else:
+            seen[uid] = True
 
 
 def _get_field_value(patient, group_name, field_key):

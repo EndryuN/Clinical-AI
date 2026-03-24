@@ -81,16 +81,17 @@ function showUploadError(msg) {
 
 // ===== Process Page =====
 function initProcessPage() {
-    // Show current model
+    // Show current model in both pre-extraction and active extraction sections
     fetch('/backend')
         .then(r => r.json())
         .then(b => {
+            const modelText = b.backend === 'claude'
+                ? 'Claude API'
+                : `${b.ollama_model} (Ollama)`;
             const el = document.getElementById('current-model');
-            if (el) {
-                el.textContent = b.backend === 'claude'
-                    ? 'Claude API'
-                    : `${b.ollama_model} (Ollama)`;
-            }
+            if (el) el.textContent = modelText;
+            const activeEl = document.getElementById('active-model');
+            if (activeEl) activeEl.textContent = modelText;
         })
         .catch(() => {});
 

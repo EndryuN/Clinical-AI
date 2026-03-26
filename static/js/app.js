@@ -382,7 +382,7 @@ function renderPatientList(patients) {
         <div class="patient-item p-2 mb-1 ${isActive ? 'active border-start border-primary border-3' : ''}"
              onclick="selectPatient('${p.id}')" style="cursor:pointer">
             <div class="fw-bold small">${p.initials || 'Unknown'} &mdash; ${p.gender || 'N/A'}</div>
-            <div class="text-muted" style="font-size:11px">${p.nhs_number || ''} &middot; ${p.cancer_type || ''}</div>
+            <div class="text-muted" style="font-size:11px">${p.nhs_number || '<span style="color:#dc3545">MISSING NHS NUMBER</span>'} &middot; ${p.cancer_type || ''}</div>
             <div class="mt-1">
                 <span class="badge bg-success" style="font-size:10px">${c.high || 0} high</span>
                 <span class="badge" style="font-size:10px;background:#f97316;">${c.medium || 0} med</span>

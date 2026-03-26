@@ -450,10 +450,21 @@ def _run_extraction(patient_limit=None, concurrency=1):
             return
 
         # --- LLM (serial via semaphore, groups run sequentially per patient) ---
-        patient_llm_groups = [
-            g for g in llm_groups
-            if any(fr.value is None for fr in patient.extractions.get(g['name'], {}).values())
-        ]
+        # Skip groups where: (a) all fields already extracted, or (b) relevant text has no content
+        from extractor.prompt_builder import _extract_relevant_text
+        patient_llm_groups = []
+        for g in llm_groups:
+            has_gaps = any(fr.value is None for fr in patient.extractions.get(g['name'], {}).values())
+            if not has_gaps:
+                continue
+            # Check if relevant text section has any substantive content
+            relevant = _extract_relevant_text(patient.raw_text, g['name'])
+            # Strip headers/markers — if less than 20 chars of actual content, skip
+            import re as _re
+            content_only = _re.sub(r'Cancer Type:.*?\n|MDT Meeting Date:.*?\n|Clinical Details\(f\):?|MDT Outcome\(h\):?|Staging.*?\(g\):?', '', relevant).strip()
+            if len(content_only) < 20:
+                continue
+            patient_llm_groups.append(g)
 
         if not patient_llm_groups:
             conf = _confidence_summary(patient)

@@ -398,39 +398,25 @@ function selectPatient(patientId) {
     fetch(`/patients/${patientId}`)
         .then(r => r.json())
         .then(data => {
-            // Load rendered preview image and coord map
-            window._previewCoords = null;
-            const previewImg = document.getElementById('preview-img');
+            // Load HTML preview
+            const previewRoot = document.getElementById('preview-root');
             const previewPlaceholder = document.getElementById('preview-placeholder');
-            const previewCanvas = document.getElementById('preview-canvas');
-            
+
             fetch(`/patient/${patientId}/preview`)
                 .then(r => r.json())
                 .then(preview => {
-                    if (preview.image_url && previewImg) {
-                        window._previewCoords = preview.coords;
-                        previewImg.onload = function() {
-                            if (previewCanvas && previewImg.clientWidth > 0) {
-                                previewCanvas.width = previewImg.clientWidth;
-                                previewCanvas.height = previewImg.clientHeight;
-                            }
-                        };
-                        previewImg.onerror = function() {
-                            previewImg.style.display = 'none';
-                            if (previewPlaceholder) previewPlaceholder.style.display = '';
-                        };
-                        previewImg.src = preview.image_url;
-                        previewImg.style.display = 'block';
+                    if (preview.html && previewRoot) {
+                        previewRoot.innerHTML = preview.html;
                         if (previewPlaceholder) previewPlaceholder.style.display = 'none';
-                        initCoverageToggle(preview.coverage_map, preview.coverage_pct, preview.coords, preview.coverage_stats);
+                        initCoverageToggle(preview.coverage_map, preview.coverage_pct, null, preview.coverage_stats);
                     } else {
-                        if (previewImg) previewImg.style.display = 'none';
+                        if (previewRoot) previewRoot.innerHTML = '';
                         if (previewPlaceholder) previewPlaceholder.style.display = 'block';
                         initCoverageToggle(null, null, null, null);
                     }
                 })
                 .catch(() => {
-                    if (previewImg) previewImg.style.display = 'none';
+                    if (previewRoot) previewRoot.innerHTML = '';
                     if (previewPlaceholder) previewPlaceholder.style.display = 'block';
                     initCoverageToggle(null, null, null, null);
                 });
@@ -471,42 +457,46 @@ function selectPatient(patientId) {
 }
 
 function highlightSource(fr) {
-    const canvas = document.getElementById('preview-canvas');
-    const img = document.getElementById('preview-img');
     const warning = document.getElementById('source-warning');
-
     if (warning) warning.classList.add('d-none');
-    if (!canvas || !img || img.naturalWidth === 0) return;
 
-    // Sync canvas pixel dimensions to current rendered image size
-    canvas.width = img.clientWidth;
-    canvas.height = img.clientHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Clear previous highlights
+    document.querySelectorAll('.preview-document .cell-highlighted').forEach(el =>
+        el.classList.remove('cell-highlighted', 'hl-high', 'hl-medium', 'hl-low')
+    );
+    // Remove text-level match highlights (restore original text nodes)
+    document.querySelectorAll('.preview-document .text-match').forEach(span => {
+        const parent = span.parentNode;
+        parent.replaceChild(document.createTextNode(span.textContent), span);
+        parent.normalize();  // merge adjacent text nodes
+    });
 
     if (!fr || fr.value === null || fr.value === undefined) return;
 
-    // Check for annotation marker: exact match or contained in snippet
+    // Determine which cells to highlight
     let rows = MARKER_TO_ROWS[fr.source_snippet];
     if (!rows && fr.source_snippet) {
         for (const [marker, r] of Object.entries(MARKER_TO_ROWS)) {
             if (fr.source_snippet.includes(marker)) { rows = r; break; }
         }
     }
-    let cellsToHighlight = [];
 
+    let cells = [];
     if (rows) {
         for (const row of rows) {
             for (let col = 0; col < 3; col++) {
-                cellsToHighlight.push({row: row, col: col});
+                const el = document.querySelector(`.preview-document [data-row="${row}"][data-col="${col}"]`);
+                if (el) cells.push(el);
             }
         }
     } else if (fr.source_cell) {
-        cellsToHighlight.push(fr.source_cell);
+        const el = document.querySelector(
+            `.preview-document [data-row="${fr.source_cell.row}"][data-col="${fr.source_cell.col}"]`
+        );
+        if (el) cells.push(el);
     }
 
-    if (cellsToHighlight.length === 0) {
-        // No source cell — only warn for LLM-inferred fields, not regex extractions
+    if (cells.length === 0) {
         if (fr.value !== null && fr.value !== '' &&
             fr.confidence_basis !== 'structured_verbatim' && warning) {
             warning.classList.remove('d-none');
@@ -514,35 +504,50 @@ function highlightSource(fr) {
         return;
     }
 
-    if (!window._previewCoords) {
-        // No preview available for this patient (e.g. Excel import where original preview is missing)
-        return;
+    const conf = fr.confidence || 'low';
+    for (const cell of cells) {
+        cell.classList.add('cell-highlighted', 'hl-' + conf);
+
+        // Try to highlight the specific matched text within the cell
+        if (fr.source_snippet && fr.source_snippet.length > 2) {
+            _highlightTextInElement(cell, fr.source_snippet, conf);
+        } else if (fr.value && fr.value.length > 2) {
+            _highlightTextInElement(cell, fr.value, conf);
+        }
+
+        cell.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    }
+}
+
+function _highlightTextInElement(el, searchText, conf) {
+    // Walk text nodes and wrap matches in a highlight span
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const searchLower = searchText.toLowerCase();
+    const nodesToReplace = [];
+
+    while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const idx = node.textContent.toLowerCase().indexOf(searchLower);
+        if (idx >= 0) {
+            nodesToReplace.push({node, idx, len: searchText.length});
+        }
     }
 
-    const scaleX = img.clientWidth / img.naturalWidth;
-    const scaleY = img.clientHeight / img.naturalHeight;
+    for (const {node, idx, len} of nodesToReplace) {
+        const text = node.textContent;
+        const before = text.substring(0, idx);
+        const match = text.substring(idx, idx + len);
+        const after = text.substring(idx + len);
 
-    const conf = fr.confidence || 'low';
-    const colours = {
-        high:   { fill: 'rgba(25,135,84,0.25)',  stroke: '#198754' },
-        medium: { fill: 'rgba(249,115,22,0.20)',  stroke: '#f97316' },
-        low:    { fill: 'rgba(220,53,69,0.25)',   stroke: '#dc3545' },
-    };
-    const colour = colours[conf] || colours.low;
+        const span = document.createElement('span');
+        span.className = 'text-match hl-' + conf;
+        span.textContent = match;
 
-    ctx.fillStyle = colour.fill;
-    ctx.strokeStyle = colour.stroke;
-    ctx.lineWidth = 2;
-
-    for (const cellPos of cellsToHighlight) {
-        const cell = window._previewCoords[`${cellPos.row},${cellPos.col}`];
-        if (!cell) continue;
-        const x = cell.x * scaleX;
-        const y = cell.y * scaleY;
-        const w = cell.w * scaleX;
-        const h = cell.h * scaleY;
-        ctx.fillRect(x, y, w, h);
-        ctx.strokeRect(x, y, w, h);
+        const parent = node.parentNode;
+        if (before) parent.insertBefore(document.createTextNode(before), node);
+        parent.insertBefore(span, node);
+        if (after) parent.insertBefore(document.createTextNode(after), node);
+        parent.removeChild(node);
     }
 }
 
@@ -881,81 +886,18 @@ function initCoverageToggle(coverageMap, coveragePct, coords, coverageStats) {
         }
     }
 
-    // Store the normal and coverage image URLs for toggling
-    const previewImg = document.getElementById('preview-img');
-    const normalSrc = previewImg ? previewImg.src : '';
-    const coverageSrc = normalSrc.replace('.png', '_coverage.png');
-
     newBtn.addEventListener('click', () => {
         _coverageVisible = !_coverageVisible;
         newBtn.textContent = _coverageVisible ? 'Hide highlights' : 'Highlight unused';
         newBtn.classList.toggle('btn-warning', _coverageVisible);
         newBtn.classList.toggle('btn-outline-warning', !_coverageVisible);
-        // Swap image between normal and coverage version
-        if (previewImg) {
-            previewImg.src = _coverageVisible ? coverageSrc : normalSrc;
+        // Toggle coverage visibility via CSS class on document root
+        const doc = document.querySelector('.preview-document');
+        if (doc) {
+            doc.classList.toggle('show-coverage', _coverageVisible);
         }
     });
 }
 
-function renderCoverageOverlay(show, coords) {
-    const existing = document.getElementById('coverage-svg-overlay');
-    if (existing) existing.remove();
-    if (!show || !_coverageMap || !coords) {
-        console.log('[coverage] skip:', {show, hasMap: !!_coverageMap, hasCoords: !!coords});
-        return;
-    }
-
-    const previewImg = document.getElementById('preview-img');
-    if (!previewImg || previewImg.naturalWidth === 0) {
-        console.log('[coverage] image not ready:', {found: !!previewImg, natW: previewImg?.naturalWidth});
-        return;
-    }
-
-    const natW = previewImg.naturalWidth;
-    const natH = previewImg.naturalHeight;
-
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.id = 'coverage-svg-overlay';
-    // Use viewBox matching the PNG pixel dimensions so coords map 1:1
-    svg.setAttribute('viewBox', '0 0 ' + natW + ' ' + natH);
-    svg.setAttribute('preserveAspectRatio', 'none');
-    svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;';
-
-    let rectCount = 0;
-    console.log('[coverage] map keys:', Object.keys(_coverageMap), 'coord keys:', Object.keys(coords));
-    for (const [cellKey, spans] of Object.entries(_coverageMap)) {
-        if (!spans || spans.length === 0) continue;
-        const cellCoord = coords[cellKey];
-        if (!cellCoord) { console.log('[coverage] no coord for key:', cellKey); continue; }
-
-        const unusedLen = spans.filter(s => !s.used).reduce((a, s) => a + (s.end - s.start), 0);
-        const totalLen = spans.reduce((a, s) => a + (s.end - s.start), 0);
-        if (totalLen === 0 || unusedLen === 0) continue;
-
-        const ratio = unusedLen / totalLen;
-        const opacity = Math.min(0.5, 0.15 + ratio * 0.5);
-
-        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        rect.setAttribute('x', cellCoord.x);
-        rect.setAttribute('y', cellCoord.y);
-        rect.setAttribute('width', cellCoord.w);
-        rect.setAttribute('height', cellCoord.h);
-        rect.setAttribute('fill', 'rgba(255,140,0,' + opacity + ')');
-        rect.setAttribute('stroke', 'rgba(255,120,0,0.8)');
-        rect.setAttribute('stroke-width', '3');
-        rect.setAttribute('stroke-dasharray', '6,3');
-        svg.appendChild(rect);
-        rectCount++;
-    }
-
-    console.log('[coverage] drew', rectCount, 'rects');
-    if (rectCount > 0) {
-        const previewContainer = document.getElementById('preview-container');
-        if (previewContainer) {
-            previewContainer.appendChild(svg);
-        }
-    } else {
-        console.log('[coverage] no rects to draw — all cells fully used or no coord matches');
-    }
-}
+// Coverage overlay is now handled via CSS class toggle on .preview-document
+// The .show-coverage class makes .cov-used and .cov-unused spans visible

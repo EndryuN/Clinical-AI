@@ -648,7 +648,7 @@ def get_patient(patient_id):
 
 @app.route('/patient/<patient_id>/preview')
 def patient_preview(patient_id):
-    """Return rendered image URL and cell coordinate map for the patient."""
+    """Return HTML preview with selectable text and coverage data."""
     patient = next(
         (p for p in session.patients
          if p.unique_id == patient_id or p.id == patient_id),
@@ -656,18 +656,10 @@ def patient_preview(patient_id):
     )
     if not patient:
         return jsonify({"error": "not found"}), 404
-    if not session.file_name:
-        return jsonify({"error": "no file"}), 404
-    ts = session.file_name.split('_')[0]
-    file_id = patient.unique_id if patient.unique_id else patient.id
-    json_path = os.path.join(app.static_folder, 'previews', ts, f'{file_id}.json')
-    if not os.path.exists(json_path):
-        return jsonify({"error": "preview not available"}), 404
-    with open(json_path) as f:
-        coords = json.load(f)
+    from extractor.html_preview import render_html_preview
+    html = render_html_preview(patient)
     return jsonify({
-        "image_url": f"/static/previews/{ts}/{file_id}.png",
-        "coords": coords,
+        "html": html,
         "coverage_map": patient.coverage_map,
         "coverage_pct": patient.coverage_pct,
         "coverage_stats": patient.coverage_stats,

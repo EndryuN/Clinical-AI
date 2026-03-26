@@ -264,13 +264,22 @@ function listenProgress() {
                     const groupPct = Math.round(groupsDone / groupsTotal * 100);
                     const barColor = isQueued ? '#374151' : '#2563eb';
                     const opacity = isQueued ? '0.5' : '1';
-                    return `<div style="display:flex; align-items:center; gap:12px; background:#111827; border-radius:4px; padding:6px 12px; margin-bottom:4px; opacity:${opacity};">` +
-                           `<span style="font-size:13px; font-weight:700; color:#f0f0f0; min-width:40px;">${p.initials || '...'}</span>` +
-                           `<span style="font-size:11px; color:#9ca3af; min-width:120px;">${groupLabel}${contextBadge}</span>` +
-                           `<span style="font-size:9px; color:#60a5fa; min-width:60px;">${groupsDone}/${groupsTotal} groups</span>` +
-                           `<div style="flex:1; background:#1f2937; border-radius:3px; height:3px; overflow:hidden;">` +
-                           `<div style="width:${groupPct}%; height:100%; background:${barColor}; transition:width 0.5s ease;"></div></div>` +
-                           `<span style="font-size:13px; font-weight:700; color:${timerColor}; font-family:monospace; min-width:50px; text-align:right;">${mins}:${secs}</span>` +
+                    // Build group progress segments
+                    let groupSegments = '';
+                    for (let gi = 0; gi < groupsTotal; gi++) {
+                        const segDone = gi < groupsDone;
+                        const segActive = gi === groupsDone && !isQueued;
+                        const segColor = segDone ? '#198754' : segActive ? '#2563eb' : '#1f2937';
+                        const segBorder = segActive ? 'border:1px solid #3b82f6;' : '';
+                        groupSegments += `<div style="flex:1; height:6px; background:${segColor}; border-radius:3px; ${segBorder} transition:background 0.3s;"></div>`;
+                    }
+
+                    return `<div style="display:flex; align-items:center; gap:10px; background:#111827; border-radius:4px; padding:8px 14px; margin-bottom:4px; opacity:${opacity}; width:100%;">` +
+                           `<span style="font-size:14px; font-weight:700; color:#f0f0f0; min-width:40px;">${p.initials || '...'}</span>` +
+                           `<span style="font-size:11px; color:#9ca3af; min-width:130px;">${groupLabel}${contextBadge}</span>` +
+                           `<span style="font-size:10px; color:#60a5fa; min-width:65px;">${groupsDone}/${groupsTotal} groups</span>` +
+                           `<div style="flex:1; display:flex; gap:3px;">${groupSegments}</div>` +
+                           `<span style="font-size:14px; font-weight:700; color:${timerColor}; font-family:monospace; min-width:55px; text-align:right;">${mins}:${secs}</span>` +
                            `</div>`;
                 }).join('');
             }

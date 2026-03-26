@@ -520,34 +520,45 @@ function highlightSource(fr) {
 }
 
 function _highlightTextInElement(el, searchText, conf) {
-    // Walk text nodes and wrap matches in a highlight span
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    // Search across all text content (ignoring span boundaries from coverage)
+    const fullText = el.textContent.toLowerCase();
     const searchLower = searchText.toLowerCase();
-    const nodesToReplace = [];
+    const idx = fullText.indexOf(searchLower);
+    if (idx < 0) return;
+
+    // Use Range API to select across DOM nodes
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let charCount = 0;
+    let startNode = null, startOffset = 0;
+    let endNode = null, endOffset = 0;
 
     while (walker.nextNode()) {
         const node = walker.currentNode;
-        const idx = node.textContent.toLowerCase().indexOf(searchLower);
-        if (idx >= 0) {
-            nodesToReplace.push({node, idx, len: searchText.length});
+        const nodeLen = node.textContent.length;
+        if (!startNode && charCount + nodeLen > idx) {
+            startNode = node;
+            startOffset = idx - charCount;
         }
+        if (!endNode && charCount + nodeLen >= idx + searchText.length) {
+            endNode = node;
+            endOffset = idx + searchText.length - charCount;
+            break;
+        }
+        charCount += nodeLen;
     }
 
-    for (const {node, idx, len} of nodesToReplace) {
-        const text = node.textContent;
-        const before = text.substring(0, idx);
-        const match = text.substring(idx, idx + len);
-        const after = text.substring(idx + len);
+    if (!startNode || !endNode) return;
 
-        const span = document.createElement('span');
-        span.className = 'text-match hl-' + conf;
-        span.textContent = match;
-
-        const parent = node.parentNode;
-        if (before) parent.insertBefore(document.createTextNode(before), node);
-        parent.insertBefore(span, node);
-        if (after) parent.insertBefore(document.createTextNode(after), node);
-        parent.removeChild(node);
+    try {
+        const range = document.createRange();
+        range.setStart(startNode, startOffset);
+        range.setEnd(endNode, endOffset);
+        const highlight = document.createElement('span');
+        highlight.className = 'text-match hl-' + conf;
+        range.surroundContents(highlight);
+    } catch (e) {
+        // surroundContents fails if range crosses element boundaries
+        // Fall back to just the cell-level highlight (already applied)
     }
 }
 

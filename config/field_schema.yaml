@@ -167,7 +167,7 @@ groups:
         type: date
       - key: first_mdt_treatment
         excel_column: 28
-        excel_header: "1st MDT: Treatment approach"
+        excel_header: "1st MDT: Treatment approach (TNT, downstaging chemotherapy, downstaging nCRT, downstaging shortcourse RT, Papillon +/- EBRT, straight to surgery)(h)"
         prompt_hint: "The FULL text after 'Outcome:' in the MDT Outcome(h) section. Copy the complete management plan verbatim — this includes all recommended actions, not just a category name like 'TNT'."
         type: text
 

@@ -12,6 +12,7 @@ build/
 static/previews/
 groundtruth/
 docs/
+.idea/
 
 # Git worktrees
 .worktrees/

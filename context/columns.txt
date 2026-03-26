@@ -1,0 +1,104 @@
+Demographics: DOB(a)
+Demographics: Initials(b)
+Demographics: MRN(c)
+Demographics: NHS number(d)
+Demographics: Gender(e)
+Demographics:Previous cancer (y, n) if yes, where(f)
+Demographics: State site of previous cancer(f)
+
+Endoscopy: date(f)	
+Endosopy type: flexi sig, incomplete colonoscopy, colonoscopy complete - if gets to ileocecal valve(f) 	
+Endoscopy: Findings(f)	
+
+Histology: Biopsy result(g)	
+Histology: Biopsy date(g)	
+Histology: MMR status(g/h)
+
+Baseline MRI: date(h)
+Baseline MRI: mrT(h)	
+Baseline MRI: mrN(h)	
+Baseline MRI: mrEMVI(h)	
+Baseline MRI: mrCRM(h)	
+Baseline MRI: mrPSW(h)	
+Baseline CT: Date(h)	
+Baseline CT: T(h)	
+Baseline CT: N(h)	
+Baseline CT: EMVI(h)	
+Baseline CT: M(h)	
+Baseline CT: Incidental findings requiring follow up? Y/N(h)	
+Baseline CT: Detail incidental finding(h)	
+
+1st MDT: date(i)
+1st MDT: Treatment approach (TNT, downstaging chemotherapy, downstaging nCRT, downstaging shortcourse RT, Papillon +/- EBRT, straight to surgery(h)
+
+Chemotherapy: Treatment goals  (curative, palliative)
+Chemotherapy: Drugs	
+Chemotherapy: Cycles	
+Chemotherapy: Dates	
+Chemotherapy: Breaks	
+Immunotherapy: Dates	
+Immunotherapy	
+
+Radiotheapy: Total dose	
+Radiotheapy: Boost	
+Radiotherapy: Dates	
+Radiotheapy: Concomittant chemotherapy 
+
+CEA: Date	
+CEA: Value
+CEA: DRE date 
+CEA: DRE finding
+
+Surgery: Defunctioned?
+Surgery: Date of surgery
+Surgery: Intent, pre-neoadjuvant therapy
+
+2nd MRI: Date	
+2nd MRI: Patient pathway status	
+2nd MRI: mrT	
+2nd MRI: mrN	
+2nd MRI: mrEMVI	
+2nd MRI: mrCRM	
+2nd MRI: mrPSW	
+2nd MRI: mrTRG score 	
+
+MDT (after 6 week: Date	
+MDT (after 6 week: Decision 
+
+12 week MRI: Date	
+12 week MRI: mrT	
+12 week MRI: mrN	
+12 week MRI: mrEMVI	
+12 week MRI: mrCRM	
+12 week MRI: mrPSW	
+12 week MRI: mrTRG score 	
+
+Flex sig: Date	
+Flex sig: Fidnings 
+
+MDT (after 12 week): Date	
+MDT (after 12 week): Decision 	
+
+Watch and wait: Entered watch + wait, date of MDT ?	
+Watch and wait: Why did they enter wait (with what intent)	
+Watch and wait: Frequency?	"
+Watch and wait: Date of progression
+Watch and wait: Site of progression"	
+Watch and wait: Date of death
+
+MRI and flexisigmoidoscopy watch and wait dates: Date entered watch and wait	
+MRI and flexisigmoidoscopy watch and wait dates: Flexisigmoidoscopy date 	
+MRI and flexisigmoidoscopy watch and wait dates: Due date next 	
+MRI and flexisigmoidoscopy watch and wait dates: Flexisigmoidoscopy date	
+MRI and flexisigmoidoscopy watch and wait dates: Due date next 	
+MRI and flexisigmoidoscopy watch and wait dates: Flexisigmoidoscopy date	
+MRI and flexisigmoidoscopy watch and wait dates: Due date next 	
+MRI and flexisigmoidoscopy watch and wait dates: Flexisigmoidoscopy date	
+
+MRI and flexisigmoidoscopy watch and wait dates: Due date next 	
+MRI and flexisigmoidoscopy watch and wait dates: MRI Date	
+MRI and flexisigmoidoscopy watch and wait dates: Due date next 	
+MRI and flexisigmoidoscopy watch and wait dates: MRI Date	
+MRI and flexisigmoidoscopy watch and wait dates: Due date next 	
+MRI and flexisigmoidoscopy watch and wait dates: MRI Date	
+MRI and flexisigmoidoscopy watch and wait dates: Due date next 

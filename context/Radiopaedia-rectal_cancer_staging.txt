@@ -1,0 +1,160 @@
+Staging of rectal cancer uses the TNM staging system and strongly predicts the success, and rate, of local recurrence following rectal cancer resection. MRI is the modality of choice for the staging of rectal cancer, to guide surgical and non-surgical management options. MRI is used at diagnosis, following downstaging chemoradiotherapy, and in follow-up, if a non-operative approach is used.
+
+Note that there has been controversy regarding the ability of TNM 8 to appropriately identify high-risk factors in rectal cancer, most notably due to the emphasis placed on lymph node metastases, and not enough regard paid to tumour deposits 11.
+
+TNM staging
+See TNM staging system for a general description, and terminology of rectal cancer staging lists the various abbreviations used in rectal cancer staging.
+
+Primary tumour staging (T)
+Strictly speaking TNM staging, such as the American Joint Committee on Cancer (AJCC) 8th edition, does not subclassify T3. However, this subclassification does have treatment and prognostic significance 7,8; tumours with a stage T3b or less confer a 5-year cancer-specific survival rate of 85%, whereas tumours with a stage T3c or greater have a 54% survival rate.
+
+Tx: primary tumour cannot be assessed
+
+T0: no evidence of primary tumour
+
+Tis: carcinoma in situ: intraepithelial or invasion of lamina propria
+
+T1: tumour invades submucosa
+
+T2: tumour invades muscularis propria
+
+MRI does not yet have the resolution capable of enabling differentiation of T1 and T2 lesions
+
+T3: tumour invades through the muscularis propria into the subserosa or into non-peritonealised perirectal tissues without reaching the mesorectal fascia or adjacent organs
+
+T3a: tumour extends <1 mm beyond muscularis propria 4
+
+T3b: tumour extends 1-5 mm beyond muscularis propria 4
+
+T3c: tumour extends 5-15 mm beyond muscularis propria 4
+
+T3d: tumour extends 15 mm beyond muscularis propria 4
+
+T4: tumour invades directly into other organs or structures and/or perforates visceral peritoneum
+
+T4a: tumour penetrates to the surface of the visceral peritoneum
+
+T4b: tumour directly invades or is adherent to other organs or structures
+
+Assessing T3 disease, it is important to remember that desmoplastic reaction can mimic this due to fibrosis; however, desmoplastic reaction has a spiky and sharp configuration whereas tumour usually has a nodular and lumpy configuration.
+
+The planes that the small field-of-view axial and coronal sequences have been acquired in should be carefully scrutinised; obliquity may lead to overstaging of tumours due to apparent transgression of tumour through the muscularis propria, but that is in fact an artifact of the plane and volume averaging.
+
+The distance from the invasive margin of the tumour (T3 disease) to the mesorectal fascia is important in guiding resection and the need for preoperative chemo-radiotherapy.
+
+Regional lymph nodes (N)
+For cancers above the dentate line, regional nodes are mesorectal, superior rectal, inferior mesenteric, internal iliac and obturator. Common iliac, external iliac and inguinal nodes are not considered regional (except for tumours below the dentate line, when inguinal nodes are considered regional). Size is not considered to be a very helpful criterion; up to 40% of nodes <5 mm contain tumour. A combination of signal heterogeneity, irregular contour, round shape and size are the most reliable signs of nodal involvement on MRI 15. Nodes greater than 9 mm in short axis diameter are considered suspicious. If between 5 and 9 mm, they must have two of three characteristics listed above: signal heterogeneity, irregular contour or round shape. If under 5 mm, they must have all three. In the restaging setting, nodes greater than 5 mm are considered to remain involved.
+
+Nx: regional nodes cannot be assessed
+
+N0: no regional lymph node metastases
+
+N1: metastasis in 1-3 regional (perirectal) lymph nodes
+
+N1a: metastasis in 1 regional lymph node
+
+N1b: metastasis in 2-3 regional lymph nodes
+
+N1c: tumour deposit(s) in the subserosa, mesentery, or non-peritonealised pericolic or perirectal tissues without regional nodal metastasis
+
+N2: metastasis in 4 or more regional lymph nodes
+
+N2a: metastasis in 4-6 regional lymph nodes
+
+N2b: metastasis in 7 or more regional lymph nodes
+
+Note that internal iliac and obturator nodes are considered to be locoregional for rectal cancers, whereas external and common iliac and inguinal nodes are considered metastatic. A multicentre study found that lateral nodes >7 mm rendered a greater possibility of recurrence if treatment was just chemoradiotherapy and rectal cancer surgery, and no pelvic sidewall dissection 12. In the restaging setting, internal iliac nodes greater than 4 mm and obturator nodes greater than 6 mm are considered to remain involved.
+
+Metastases (M)
+Mx: cannot be assessed
+
+M0: no distant metastasis
+
+M1: distant metastasis
+
+M1a: metastasis confined to one organ or site (for example, liver, lung, ovary, non-regional node) without peritoneal metastases
+
+M1b: metastases in more than one organ
+
+M1c: metastasis to the peritoneum with or without other organ involvement
+
+Stage groupings
+stage 0: Tis N0 M0
+
+stage I: T1-2, N0 M0
+
+stage II
+
+IIa: T3, N0, M0
+
+IIb: T4a, N0, M0
+
+IIc: T4b, N0, M0
+
+stage III
+
+IIIa: T1-2, N1, M0
+
+IIIb: T3-4, N1, M0
+
+IIIc: T3-4b, N2, M0
+
+stage IV: any T, any N, M1
+
+Additional prognostic indicators
+The following are significant prognostic indicators, and should be commented on when staging rectal cancer with MRI, alongside the TNM stage:
+
+extramural venous invasion (EMVI)
+
+discrete serpiginous or tubular projections of tumour signal tissue into perirectal fat, following the course of a visible vein
+
+may be contiguous or non-contiguous
+
+non-contiguous deposits reflect N1c
+
+imparts poor prognosis as a predictor of haematogenous spread
+
+tumour deposits 11
+
+distinct from lymph node metastases
+
+found along path of vessels, and interrupt vessels
+
+may see vessel "tail" into deposit
+
+separate from primary tumour
+
+irregular contours compared to most lymph node metastases which have smooth contours
+
+circumferential resection margin (CRM)
+
+represented by the mesorectal fascia (MRF) in the non-peritonealised portion of the rectum
+
+CRM positive if either tumour, involved lymph node, or EMVI (continuous or discontinuous) is within 1 mm of the mesorectal fascia
+
+peritoneal reflection does not constitute CRM, which if involved reflects at least stage T4a disease
+
+Additional specific MRI imaging staging subsets of rectal tumour
+Special consideration should be given to low rectal tumours as these carry a different prognosis from higher lesions. This is predominantly due to anatomical considerations including waist-like tapering of the mesorectum 10.
+
+Subclassification of early rectal cancer and significant polyps may be attempted with use of good quality, high-resolution T2-weighted MR images, but is not widely utilised, with endorectal ultrasound being the current preferred modality. MRI staging relies on the recognition that most rectal tumours (apart from mucinous tumours) have intermediate T2 signal compared to hyperintense submucosa and hypointense muscularis layers 9. Such staging may be helpful in selecting less extensive surgical resection options. Most sessile lesions are resected and then the staging is given at histopathology analysis.
+
+low rectal tumour staging 10
+
+stage 1: tumour confined to bowel wall with intact outer muscularis propria
+
+stage 2: tumour replaces muscularis propria but does not extend into intersphincteric plane
+
+stage 3: tumour invades intersphincteric plane or lies within 1 mm of levator muscles
+
+stage 4: tumour invades external anal sphincter and is within 1 mm and beyond levators with or without invading adjacent organs
+
+malignant sessile polyps may be staged using the Kikuchi system, this is done by pathology analysis 14
+
+SM1: tumour invasion into upper third of submucosa
+
+SM2: tumour invasion into middle third of submucosa
+
+SM3: tumour invasion into lower third of submucosa
+
+Due to difficulty in assessing specimens for the depth of invasion relative to the whole depth of the submucosa, another classification is "superficial submucosal invasion" for invasion of less than 1 mm and "deep submucosal invasion" for invasion of greater than or equal to 1 mm. The former carries a low risk of nodal metastasis (0-4%), whereas the latter carries a higher risk (10-18%) 14.

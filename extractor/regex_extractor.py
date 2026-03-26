@@ -218,11 +218,17 @@ def _extract_demographics(text: str) -> dict:
     name_match = re.search(r'([A-Z][A-Za-z\'\-]+(?:\s+[A-Za-z\'\-]+)+)\s*\(b\)', text)
     raw_name_span = None
     if not name_match:
-        # Try all-caps name line
+        # Try all-caps name line (skip medical/document keywords)
+        _NOT_NAME = {'DAY', 'TARGET', 'BREACH', 'DATE', 'PATHWAY', 'PLEASE', 'TREATMENT',
+                     'DECISION', 'STAGING', 'DIAGNOSIS', 'CLINICAL', 'MDT', 'OUTCOME',
+                     'NOTE', 'NUMBER', 'HOSPITAL', 'NHS', 'CANCER', 'PATIENT', 'DETAILS'}
         for line in text.split('\n'):
             cleaned = re.sub(r'\([a-z]\)', '', line).strip()
             if cleaned and len(cleaned) > 3 and ' ' in cleaned:
                 if cleaned.replace(' ', '').replace("'", '').replace('-', '').isupper():
+                    words = cleaned.upper().split()
+                    if any(w in _NOT_NAME for w in words):
+                        continue
                     raw_name_span = cleaned
                     name_match = type('', (), {'group': lambda self, x: cleaned})()
                     break

@@ -324,14 +324,17 @@ def _import_excel(file_path: str) -> list:
         nhs_number = demo.get("nhs_number", FieldResult()).value or ''
         mrn = demo.get("mrn", FieldResult()).value or patient_id
 
-        # If initials look wrong (contain digits = probably "62 DAY TARGET" bug),
-        # try extracting from unique_id (format: DDMMYYYY_INITIALS_G_disambig)
-        if initials and any(c.isdigit() for c in initials) and unique_id and '_' in unique_id:
-            parts = unique_id.split('_')
-            if len(parts) >= 2:
-                initials = parts[1]
-
         raw_cells = rawcells_lookup.get(lookup_key, [])
+
+        # If initials look wrong (contain digits = "62 DAY TARGET" bug),
+        # re-extract name from raw_cells patient details (row 1 col 0)
+        if initials and any(c.isdigit() for c in initials) and raw_cells:
+            from parser.docx_parser import _extract_name, _initials
+            details_cell = next((c['text'] for c in raw_cells if c['row'] == 1 and c['col'] == 0), '')
+            if details_cell:
+                name = _extract_name(details_cell)
+                if name:
+                    initials = _initials(name)
         c_map = coverage_map_lookup.get(lookup_key, {})
         c_pct = coverage_lookup.get(lookup_key)
 

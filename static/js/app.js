@@ -322,7 +322,7 @@ let schemaGroups = {};  // {groupName: {color: "#...", fields: [...]}}
 
 // Load schema colours on page load
 fetch('/schema').then(r => r.json()).then(groups => {
-    groups.forEach(g => { schemaGroups[g.name] = {color: g.color, fields: g.fields}; });
+    groups.forEach(g => { schemaGroups[g.name] = {color: g.color, fields: g.fields, headers: g.field_headers || {}}; });
 }).catch(() => {});
 let confidenceFilter = '';
 let allPatientExtractions = {};
@@ -641,6 +641,7 @@ function renderFieldTable(fields, groupName) {
     }
 
     const groupColor = (schemaGroups[groupName] || {}).color || '#D9D9D9';
+    const fieldHeaders = (schemaGroups[groupName] || {}).headers || {};
 
     tbody.innerHTML = entries.map(([key, fr]) => {
         const hasValue = fr.value !== null && fr.value !== undefined && fr.value !== '';
@@ -673,7 +674,7 @@ function renderFieldTable(fields, groupName) {
         return `
         <tr class="${isPending ? 'pending-row' : ''}" style="border-left: 4px solid ${groupColor}; ${rowBg} cursor:pointer; border-bottom: none;"
             data-fr="${safeFrData}" onclick="highlightSource(JSON.parse(this.dataset.fr))">
-            <td class="small" style="color: ${hasValue ? '#c9d1d9' : '#555'};">${key}</td>
+            <td class="small" style="color: ${hasValue ? '#c9d1d9' : '#555'};" title="${key}">${(fieldHeaders[key] || key).replace(/^[^:]+:\s*/, '')}</td>
             <td>
                 <input type="text" class="form-control form-control-sm bg-dark text-light border-${confClass}"
                        value="${safeValue}" placeholder="${hasValue ? '' : 'Enter value...'}"

@@ -933,12 +933,13 @@ def settings_overrides():
 
 @app.route('/schema')
 def schema():
-    """Return schema groups with colours and field keys for the frontend."""
+    """Return schema groups with colours, field keys and headers for the frontend."""
     groups = get_groups()
     return jsonify([{
         "name": g['name'],
         "color": g.get('color', '#D9D9D9'),
-        "fields": [f['key'] for f in g['fields']]
+        "fields": [f['key'] for f in g['fields']],
+        "field_headers": {f['key']: f.get('excel_header', f['key']) for f in g['fields']},
     } for g in groups])
 
 

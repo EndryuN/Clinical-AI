@@ -1,0 +1,17 @@
+Extract Watch and Wait (W&W) programme details.
+
+W&W is offered when a patient achieves complete clinical response (cCR) after treatment.
+Entry reasons: "Complete clinical response", "Near-complete response", "Patient preference"
+Look for: "watch and wait", "W&W", "active surveillance", "organ preservation"
+
+Example input:
+"Following excellent response to CRT, MRI shows no residual tumour. Flexi sig: scar only. Entered W&W programme 15/06/2025, 3-monthly surveillance."
+
+Example output:
+{
+  "ww_entered_date": {"value": "15/06/2025", "reason": "Date stated after W&W entry", "source_section": "(h)"},
+  "ww_reason": {"value": "Complete clinical response", "reason": "Excellent response, no residual tumour on MRI", "source_section": "(h)"},
+  "ww_frequency": {"value": "3-monthly", "reason": "3-monthly surveillance stated", "source_section": "(h)"},
+  "ww_progression_date": {"value": null, "reason": "No progression mentioned", "source_section": null},
+  "ww_progression_site": {"value": null, "reason": "No progression mentioned", "source_section": null}
+}

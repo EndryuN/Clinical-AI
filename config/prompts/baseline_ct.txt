@@ -1,0 +1,22 @@
+Extract CT staging data from MDT Outcome(h) section.
+
+CT staging reference:
+- T staging: T1-T4 (from TNM pattern like T3N1M0, or "T3" alone)
+- N staging: N0-N2 (from TNM pattern or "N1" alone)
+- M staging: M0=no metastasis, M1a=one organ, M1b=multiple organs, M1c=peritoneal
+  "no distant metastases" = M0. "liver mets" = M1a. "lung and liver" = M1b
+- EMVI: Positive or Negative
+
+Example input:
+"CT TAP 01/02/2025: Rectal mass T3N1. Liver metastasis in segment 6. No lung lesions. EMVI negative."
+
+Example output:
+{
+  "baseline_ct_date": {"value": "01/02/2025", "reason": "Date stated after CT TAP", "source_section": "(h)"},
+  "baseline_ct_t": {"value": "T3", "reason": "From TNM pattern T3N1", "source_section": "(h)"},
+  "baseline_ct_n": {"value": "N1", "reason": "From TNM pattern T3N1", "source_section": "(h)"},
+  "baseline_ct_m": {"value": "M1a", "reason": "[REF] Liver metastasis in single organ = M1a", "source_section": "(h)"},
+  "baseline_ct_emvi": {"value": "Negative", "reason": "EMVI negative stated", "source_section": "(h)"},
+  "baseline_ct_incidental": {"value": "N", "reason": "No unexpected findings beyond staging", "source_section": null},
+  "baseline_ct_incidental_detail": {"value": null, "reason": "No incidental findings", "source_section": null}
+}

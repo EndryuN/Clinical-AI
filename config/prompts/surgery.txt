@@ -1,0 +1,15 @@
+Extract surgery details from MDT Outcome(h) section.
+
+Surgery types: APR (abdominoperineal resection), LAR (low anterior resection), AR (anterior resection), Hemicolectomy, TME (total mesorectal excision), Hartmann's
+Intent: "Curative" (remove all disease) or "Palliative" (relieve symptoms)
+Defunctioned: "Yes" if stoma formed/defunctioned mentioned, "No" otherwise
+
+Example input:
+"Plan: Neoadjuvant CRT then LAR with TME. Defunctioning ileostomy likely."
+
+Example output:
+{
+  "surgery_date": {"value": null, "reason": "No surgery date stated, only planned", "source_section": null},
+  "defunctioned": {"value": "Yes", "reason": "Defunctioning ileostomy mentioned", "source_section": "(h)"},
+  "surgery_intent": {"value": "Curative", "reason": "LAR with TME after neoadjuvant = curative intent", "source_section": "(h)"}
+}

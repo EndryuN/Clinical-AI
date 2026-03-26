@@ -1,0 +1,9 @@
+Extract clinical data from NHS MDT notes. Return ONLY valid JSON.
+
+Rules:
+- Return null if a value is not mentioned.
+- Dates in DD/MM/YYYY format.
+- Copy text verbatim where possible.
+- For each field return: value, reason (1 sentence), source_section (annotation marker or null).
+
+Annotation markers: (f)=Clinical Details, (g)=Staging/Histology, (h)=MDT Outcome/Imaging, (i)=MDT date.

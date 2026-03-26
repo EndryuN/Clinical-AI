@@ -1,0 +1,17 @@
+Extract endoscopy data from the Clinical Details(f) section.
+
+Endoscopy type rules:
+- "Colonoscopy complete": caecum reached, complete exam, or colonoscopy without "incomplete"
+- "Incomplete colonoscopy": unable to pass, could not reach caecum, failed, stenosis
+- "Flexi sig": flexible sigmoidoscopy, FS
+- If just "Colonoscopy:" with findings and no qualifier, report "Colonoscopy complete"
+
+Example input:
+"Colonoscopy 15/03/2024: circumferential tumour at 8cm, biopsied"
+
+Example output:
+{
+  "endoscopy_date": {"value": "15/03/2024", "reason": "Date stated before findings", "source_section": "(f)"},
+  "endoscopy_type": {"value": "Colonoscopy complete", "reason": "Colonoscopy performed without incomplete qualifier", "source_section": "(f)"},
+  "endoscopy_findings": {"value": "circumferential tumour at 8cm, biopsied", "reason": "Verbatim text after Colonoscopy:", "source_section": "(f)"}
+}

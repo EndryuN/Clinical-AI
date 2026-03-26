@@ -18,7 +18,7 @@ def test_build_prompt_returns_tuple():
 
 def test_system_prompt_contains_role():
     system, user = build_prompt("patient text", _demo_group())
-    assert "clinical data extraction" in system.lower()
+    assert "extract" in system.lower() and "clinical" in system.lower()
 
 
 def test_system_prompt_contains_annotation_markers():

@@ -1,87 +1,156 @@
 # extractor/prompt_builder.py
+"""
+Builds LLM prompts from per-group template files in config/prompts/.
+
+Prompt structure (optimised for 8B models):
+1. Base system instructions (short, from system_base.txt)
+2. Group-specific instructions + clinical reference + few-shot example (from {group}.txt)
+3. Field list with allowed values from overrides
+4. ONLY the relevant section of patient text (not the full document)
+"""
+import os
+import re
 from config import get_groups, get_field_override
 from extractor.clinical_context import get_context_for_group, ABBREVIATIONS
 
-_SYSTEM_TEMPLATE = """You are a clinical data extraction assistant specialising in NHS MDT (Multidisciplinary Team Meeting) outcome proformas for colorectal cancer patients.
+_PROMPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'prompts')
 
-The document uses annotation markers: (a)=DOB, (b)=Name, (c)=NHS Number, (d)=Hospital Number, (e)=Gender, (f)=Clinical Details/Endoscopy, (g)=Staging & Diagnosis/Histology, (h)=MDT Outcome/Imaging, (i)=MDT date.
+# Cache loaded prompt files
+_prompt_cache: dict[str, str] = {}
 
-{abbreviations}
 
-IMPORTANT RULES:
-- If a date or value is not mentioned in the text, return null as the value.
-- Dates should be in DD/MM/YYYY format.
-- For the "1st MDT: Treatment approach" field, extract the FULL text after "Outcome:" in the MDT Outcome section — this includes the complete management plan, not just a category name.
-- The "MDT Meeting Date" line at the top of the notes is the 1st MDT date.
-- CT and MRI staging data is usually found in the "MDT Outcome(h)" section, not in a separate imaging report.
-- Look for TNM staging patterns like T2N0M0 or T3dN2M1 — split these into separate T, N, M values.
-- Endoscopy findings are in the "Clinical Details(f)" section, often after "Colonoscopy:" or "Flexi sig:".
-- Histology/biopsy results are in the "Staging & Diagnosis(g)" section under "Diagnosis:".
-- MMR status may appear in the MDT Outcome section (e.g., "MMR proficient" or "MMR deficient").
-- EMVI status may be written as "EMVI +ve"/"EMVI -ve" or "EMVI positive"/"EMVI negative".
-- For each field, return "source_section": the annotation marker where you found the value — one of (a), (b), (c), (d), (e), (f), (g), (h), (i) — or null if not found.
+def _load_prompt_file(name: str) -> str:
+    """Load a prompt template from config/prompts/. Cached."""
+    if name not in _prompt_cache:
+        path = os.path.join(_PROMPTS_DIR, name)
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                _prompt_cache[name] = f.read().strip()
+        except FileNotFoundError:
+            _prompt_cache[name] = ''
+    return _prompt_cache[name]
 
-For each field, provide:
-- "value": the extracted value, or null if not mentioned in the text
-- "confidence": one of "high", "medium", or "low"
-- "reason": a brief explanation (1 sentence) of WHY you assigned this confidence level.{context_reason_rule}
-- "source_section": annotation marker where the value was found, e.g. "(h)", or null
 
-Confidence levels:
-- "high": the value is explicitly and clearly stated in the text
-- "medium": the value is inferred from context or partially stated
-- "low": the value is ambiguous, unclear, or you are guessing
+def _clear_prompt_cache():
+    """Clear cache (for testing or after editing prompt files)."""
+    _prompt_cache.clear()
 
-{context_section}Return ONLY valid JSON in this exact format:
-{{
-{json_example}
-}}"""
 
-_CONTEXT_REASON_RULE = """ If you used the Clinical Reference below to classify or interpret a value, start your reason with "[REF]" and cite the specific definition used. If you did NOT use the reference, do not mention it."""
+# Section markers → which text sections to include
+_GROUP_SECTIONS = {
+    'Endoscopy':        ['(f)'],
+    'Baseline CT':      ['(h)'],
+    'Surgery':          ['(h)'],
+    'Watch and Wait':   ['(h)', '(f)'],
+    'Histology':        ['(g)', '(h)'],
+    'Baseline MRI':     ['(h)'],
+    'Second MRI':       ['(h)'],
+    '12-Week MRI':      ['(h)'],
+    'MDT':              ['(h)', '(i)'],
+    'Chemotherapy':     ['(h)'],
+    'Immunotherapy':    ['(h)'],
+    'Radiotherapy':     ['(h)'],
+    'CEA and Clinical': ['(f)', '(h)'],
+    'Follow-up Flex Sig': ['(f)', '(h)'],
+    'Watch and Wait Dates': ['(f)', '(h)'],
+}
+
+# Map section markers to document section headers
+_SECTION_HEADERS = {
+    '(f)': r'Clinical Details\(f\)',
+    '(g)': r'Staging & Diagnosis\(g\)',
+    '(h)': r'MDT Outcome\(h\)',
+    '(i)': r'MDT Meeting Date',
+}
+
+
+def _extract_relevant_text(patient_text: str, group_name: str) -> str:
+    """Extract only the relevant sections of patient text for this group.
+
+    Falls back to full text if section extraction fails.
+    """
+    sections_needed = _GROUP_SECTIONS.get(group_name)
+    if not sections_needed:
+        return patient_text
+
+    extracted_parts = []
+
+    # Always include the header (Cancer Type + MDT date)
+    header_match = re.match(r'(Cancer Type:.*?\n(?:MDT Meeting Date:.*?\n)?)', patient_text)
+    if header_match:
+        extracted_parts.append(header_match.group(1).strip())
+
+    for marker in sections_needed:
+        header_pattern = _SECTION_HEADERS.get(marker)
+        if not header_pattern:
+            continue
+        # Find section: from header to next section or end
+        pattern = rf'({header_pattern}.*?)(?=\n(?:Patient Details|Staging & Diagnosis|Clinical Details|MDT Outcome|Cancer Target)|$)'
+        m = re.search(pattern, patient_text, re.DOTALL | re.IGNORECASE)
+        if m:
+            extracted_parts.append(m.group(1).strip())
+
+    if not extracted_parts:
+        return patient_text  # fallback
+
+    return '\n\n'.join(extracted_parts)
 
 
 def build_prompt(patient_text: str, group: dict) -> tuple[str, str]:
     """Build system and user prompts for a specific schema group.
-    Returns (system_prompt, user_prompt).
+
+    Uses per-group prompt files from config/prompts/ if available,
+    falls back to generic template otherwise.
     """
+    group_name = group['name']
+
+    # Build field list with allowed values from overrides
     field_lines = []
     for f in group['fields']:
         override = get_field_override(f['key'])
         allowed = override.get('allowed_values', [])
         hint = f['prompt_hint']
         if allowed:
-            hint += f" Value MUST be one of: {', '.join(allowed)}. Return null if not mentioned."
+            hint += f" MUST be one of: {', '.join(allowed)}, or null."
         field_lines.append(f"- {f['key']}: {hint}")
-    field_list = "\n".join(field_lines)
-    json_example = ",\n".join(
-        f'  "{f["key"]}": {{"value": "...", "confidence": "high|medium|low", "reason": "...", "source_section": "(a)-(i) or null"}}'
+    field_list = '\n'.join(field_lines)
+
+    # JSON format example
+    json_fields = ',\n'.join(
+        f'  "{f["key"]}": {{"value": "...", "reason": "...", "source_section": "(f)|(g)|(h)|null"}}'
         for f in group['fields']
     )
 
-    context = get_context_for_group(group['name'])
-    context_section = ""
-    context_reason_rule = ""
-    if context:
-        context_section = f"## Clinical Reference\n{context}\n\n"
-        context_reason_rule = _CONTEXT_REASON_RULE
+    # Load base system prompt
+    base = _load_prompt_file('system_base.txt')
 
-    system_prompt = _SYSTEM_TEMPLATE.format(
-        abbreviations=ABBREVIATIONS,
-        context_section=context_section,
-        context_reason_rule=context_reason_rule,
-        json_example=json_example,
-    )
-    user_prompt = (
-        f"Fields to extract:\n{field_list}\n\n"
-        f"Patient MDT Notes:\n---\n{patient_text}\n---"
-    )
+    # Load group-specific prompt (instructions + reference + example)
+    group_file = group_name.lower().replace(' ', '_').replace('&', 'and') + '.txt'
+    group_prompt = _load_prompt_file(group_file)
+
+    # If no group-specific file, use clinical context as fallback
+    if not group_prompt:
+        context = get_context_for_group(group_name)
+        if context:
+            group_prompt = f"Clinical Reference:\n{context}"
+
+    # Assemble system prompt (concise for 8B models)
+    system_parts = [base]
+    if group_prompt:
+        system_parts.append(group_prompt)
+    system_parts.append(f"Return JSON in this exact format:\n{{\n{json_fields}\n}}")
+    system_prompt = '\n\n'.join(system_parts)
+
+    # Extract only relevant text sections
+    relevant_text = _extract_relevant_text(patient_text, group_name)
+
+    user_prompt = f"Fields to extract:\n{field_list}\n\nPatient notes:\n---\n{relevant_text}\n---"
+
     return system_prompt, user_prompt
 
 
 def build_all_prompts(patient_text: str) -> list[tuple[dict, str, str]]:
-    """Build system+user prompts for all schema groups.
-    Returns list of (group, system_prompt, user_prompt).
-    """
+    """Build system+user prompts for all schema groups."""
     return [
         (group, *build_prompt(patient_text, group))
         for group in get_groups()

@@ -577,15 +577,23 @@ function renderGroupTabs(groups) {
         }
 
         const schema = schemaGroups[g] || {};
-        const color = schema.color || '#D9D9D9';
+        // Stronger colours for tabs (Excel pastels are too faint on dark UI)
+        const TAB_COLORS = {
+            '#F2F2F2': '#8A8FA0', // grey → slate
+            '#D6E4F0': '#4A90C4', // blue → stronger blue
+            '#E2EFDA': '#5AAF5E', // green → stronger green
+            '#FFF2CC': '#D4A843', // yellow → stronger amber
+        };
+        const color = TAB_COLORS[schema.color] || schema.color || '#888';
         const isActive = g === currentGroup;
-        const opacity = isActive ? '1' : groupHasData ? '0.7' : '0.35';
-        const border = isActive ? 'border: 2px solid #fff;' : 'border: 1px solid rgba(255,255,255,0.2);';
+        const opacity = isActive ? '1' : groupHasData ? '0.85' : '0.4';
+        const border = isActive ? 'border: 2px solid #fff;' : 'border: 1px solid rgba(255,255,255,0.15);';
         const fontWeight = isActive ? 'font-weight: 700;' : '';
+        const textColor = isActive ? '#fff' : '#f0f0f0';
         html += `
         <li class="nav-item" style="margin: 2px;">
             <a class="nav-link" href="#"
-               style="background-color: ${color}; opacity: ${opacity}; color: #000; ${border} ${fontWeight}
+               style="background-color: ${color}; opacity: ${opacity}; color: ${textColor}; ${border} ${fontWeight}
                       border-radius: 6px; padding: 5px 12px; font-size: 12px;"
                onclick="switchGroup('${g}'); return false;">${g}</a>
         </li>`;

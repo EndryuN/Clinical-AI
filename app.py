@@ -772,9 +772,8 @@ def export():
 
 @app.route('/export/consultation')
 def export_consultation():
-    """Export consultation/groundtruth Excel for doctor review."""
-    if not session.patients:
-        return jsonify({"error": "No data to export"}), 400
+    """Export consultation/groundtruth Excel for doctor review.
+    Works with or without patient data — schema + overrides always available."""
     from export.consultation_writer import write_consultation_excel
     output_path = os.path.join(app.config['UPLOAD_FOLDER'], 'field_consultation.xlsx')
     write_consultation_excel(session.patients, output_path)

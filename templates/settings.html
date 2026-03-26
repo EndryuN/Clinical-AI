@@ -61,8 +61,9 @@ document.addEventListener('DOMContentLoaded', () => {
         overrides = ov || {};
         fieldData = [];
         groups.forEach(g => {
+            const headers = g.field_headers || {};
             (g.fields || []).forEach(f => {
-                fieldData.push({key: f, group: g.name, color: g.color});
+                fieldData.push({key: f, header: headers[f] || f, group: g.name, color: g.color});
             });
         });
         renderTable();
@@ -76,6 +77,7 @@ function renderTable(filter) {
     const rows = fieldData.filter(f => {
         if (!filterLower) return true;
         return f.key.toLowerCase().includes(filterLower) ||
+               f.header.toLowerCase().includes(filterLower) ||
                f.group.toLowerCase().includes(filterLower);
     }).map(f => {
         const ov = overrides[f.key] || {};
@@ -85,10 +87,12 @@ function renderTable(filter) {
             .join('');
         const allowedStr = (ov.allowed_values || []).join(', ');
 
+        const TAB_COLORS = {'#F2F2F2':'#8A8FA0','#FCD5B4':'#D48A4A','#D6E4F0':'#4A90C4','#E2EFDA':'#5AAF5E','#FFF2CC':'#D4A843'};
+        const badgeColor = TAB_COLORS[f.color] || f.color;
         return `<tr data-key="${f.key}">
             <td><code class="small">${f.key}</code></td>
-            <td class="small">${f.key}</td>
-            <td><span class="badge" style="background:${f.color};font-size:10px;">${f.group}</span></td>
+            <td class="small" style="max-width:250px; word-wrap:break-word;">${f.header}</td>
+            <td><span class="badge" style="background:${badgeColor};color:#fff;font-size:10px;">${f.group}</span></td>
             <td>
                 <select class="form-select form-select-sm bg-dark text-light border-secondary"
                         onchange="updateOverride('${f.key}','type',this.value)"

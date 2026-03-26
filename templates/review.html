@@ -68,15 +68,8 @@
             <div id="source-panel" class="border-start border-secondary overflow-auto p-3" style="flex:1; min-width:0;">
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <div class="text-muted small text-uppercase" style="font-size:10px; letter-spacing:0.5px;">Source Document</div>
-                    <div id="link-source-drop" class="link-drop-zone"
-                         onclick="document.getElementById('link-source-input').click()"
-                         ondragover="event.preventDefault(); this.classList.add('drag-over')"
-                         ondragleave="this.classList.remove('drag-over')"
-                         ondrop="event.preventDefault(); this.classList.remove('drag-over'); if(event.dataTransfer.files[0]) linkSourceFile(event.dataTransfer.files[0])">
-                        Drop .docx or click
-                    </div>
-                    <input type="file" id="link-source-input" class="d-none" accept=".docx" onchange="linkSourceFile(this.files[0])">
                 </div>
+                <input type="file" id="link-source-input" class="d-none" accept=".docx" onchange="linkSourceFile(this.files[0])">
                 <div id="source-warning" class="d-none alert alert-danger py-1 small mt-1 mb-2">
                     Value not found in source document — possible hallucination
                 </div>
@@ -97,8 +90,14 @@
                         <span id="cov-unused" class="badge bg-secondary" title="Source text not used by any field"></span>
                     </div>
                 </div>
-                <div id="preview-placeholder" class="text-center py-5">
-                    <p class="text-muted small mb-3">Select a patient to view source document</p>
+                <div id="preview-placeholder" class="link-drop-zone-large text-center"
+                     onclick="document.getElementById('link-source-input').click()"
+                     ondragover="event.preventDefault(); this.classList.add('drag-over')"
+                     ondragleave="this.classList.remove('drag-over')"
+                     ondrop="event.preventDefault(); this.classList.remove('drag-over'); if(event.dataTransfer.files[0]) linkSourceFile(event.dataTransfer.files[0])">
+                    <div class="fs-1 mb-3" style="opacity:0.3">&#x1f4c4;</div>
+                    <p class="text-muted mb-1">Select a patient to view source document</p>
+                    <p class="small" style="color: var(--app-accent);">or drop .docx here to link source</p>
                 </div>
             </div>
 

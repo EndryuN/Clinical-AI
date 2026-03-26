@@ -205,19 +205,16 @@ pre {
 }
 
 /* ── Link Source Drop Zone ── */
-.link-drop-zone {
-    border: 1px dashed var(--app-border);
-    border-radius: 4px;
-    padding: 2px 10px;
-    font-size: 10px;
-    color: var(--app-text-muted);
+.link-drop-zone-large {
+    border: 2px dashed var(--app-border);
+    border-radius: 8px;
+    padding: 60px 20px;
     cursor: pointer;
     transition: border-color 0.2s, background 0.2s;
 }
-.link-drop-zone:hover, .link-drop-zone.drag-over {
+.link-drop-zone-large:hover, .link-drop-zone-large.drag-over {
     border-color: var(--app-accent);
-    background: rgba(88, 166, 255, 0.08);
-    color: var(--app-accent);
+    background: rgba(88, 166, 255, 0.06);
 }
 
 /* ── Theme Toggle Button ── */

@@ -51,7 +51,8 @@ def test_ollama_generate_timeout_300(monkeypatch):
     monkeypatch.setattr(llm_client, '_backend', 'ollama')
     with patch.object(llm_client._session, 'post', return_value=_mock_chat_response('')) as mock_post:
         llm_client.generate("u", "s")
-    assert mock_post.call_args[1]['timeout'] == (30, 30)
+    # Small model (qwen3.5:4b) gets TIMEOUT_SMALL
+    assert mock_post.call_args[1]['timeout'] == (30, 30)  # (connect, read)
 
 
 def test_generate_works_without_system_prompt(monkeypatch):

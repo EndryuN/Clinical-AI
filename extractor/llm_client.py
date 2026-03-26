@@ -20,7 +20,8 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 OLLAMA_URL = "http://localhost:11434"
 CLAUDE_URL = "https://api.anthropic.com/v1/messages"
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
-TIMEOUT = 30  # Per-call timeout in seconds — our prompts are small and focused
+TIMEOUT_SMALL = 30   # For 8B and smaller models
+TIMEOUT_LARGE = 180  # For 14B+ models (slower generation)
 
 # Runtime state
 _backend = "claude" if ANTHROPIC_API_KEY else "ollama"
@@ -119,7 +120,7 @@ def _generate_claude(user_prompt: str, system_prompt: str = "") -> str:
     if system_prompt:
         payload["system"] = system_prompt
     try:
-        resp = _session.post(CLAUDE_URL, headers=headers, json=payload, timeout=TIMEOUT)
+        resp = _session.post(CLAUDE_URL, headers=headers, json=payload, timeout=TIMEOUT_SMALL)
         resp.raise_for_status()
         data = resp.json()
         content = data.get("content", [])
@@ -131,7 +132,7 @@ def _generate_claude(user_prompt: str, system_prompt: str = "") -> str:
     except requests.HTTPError as e:
         raise ConnectionError(f"Claude API error: {e.response.status_code} - {e.response.text}")
     except requests.Timeout:
-        raise TimeoutError(f"Claude API timed out after {TIMEOUT}s")
+        raise TimeoutError(f"Claude API timed out after {TIMEOUT_SMALL}s")
 
 
 def _generate_ollama(user_prompt: str, system_prompt: str = "") -> str:
@@ -163,9 +164,10 @@ def _generate_ollama(user_prompt: str, system_prompt: str = "") -> str:
     # Use streaming so we can abort on stop_requested
     payload["stream"] = True
     try:
-        # Connection timeout + read timeout (per chunk)
+        # Connection timeout + read timeout — larger models get more time
+        timeout = TIMEOUT_LARGE if is_large_model else TIMEOUT_SMALL
         resp = _session.post(f"{OLLAMA_URL}/api/chat", json=payload,
-                            timeout=(30, TIMEOUT), stream=True)
+                            timeout=(30, timeout), stream=True)
         resp.raise_for_status()
         content_parts = []
         import json as _json
@@ -187,7 +189,7 @@ def _generate_ollama(user_prompt: str, system_prompt: str = "") -> str:
             if chunk.get('done'):
                 break
             # Safety: abort if single generation exceeds timeout
-            if __import__('time').time() - start > TIMEOUT:
+            if __import__('time').time() - start > timeout:
                 resp.close()
                 break
         return ''.join(content_parts)
@@ -196,4 +198,4 @@ def _generate_ollama(user_prompt: str, system_prompt: str = "") -> str:
     except requests.HTTPError as e:
         raise ConnectionError(f"Ollama API error: {e.response.status_code} - {e.response.text}")
     except requests.Timeout:
-        raise TimeoutError(f"Ollama request timed out after {TIMEOUT}s")
+        raise TimeoutError(f"Ollama request timed out after {timeout}s")

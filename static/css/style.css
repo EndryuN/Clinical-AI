@@ -378,9 +378,9 @@ pre {
 .cell-content[data-group="Radiotherapy"] { border-left: 3px solid #70AD47; }
 .cell-content[data-group="CEA and Clinical"] { border-left: 3px solid #70AD47; }
 .cell-content[data-group="Watch and Wait"] { border-left: 3px solid #70AD47; }
-/* Yellow/Amber: Baseline MRI, Baseline CT, Surgery, W&W Dates */
-.cell-content[data-group="Baseline MRI"] { border-left: 3px solid #DDB63A; }
-.cell-content[data-group="Baseline CT"] { border-left: 3px solid #DDB63A; }
+/* Light Blue: Baseline MRI, Baseline CT */
+.cell-content[data-group="Baseline MRI"] { border-left: 3px solid #4A90C4; }
+.cell-content[data-group="Baseline CT"] { border-left: 3px solid #4A90C4; }
 .cell-content[data-group="Surgery"] { border-left: 3px solid #DDB63A; }
 .cell-content[data-group="Watch and Wait Dates"] { border-left: 3px solid #DDB63A; }
 

@@ -581,6 +581,7 @@ function renderGroupTabs(groups) {
         const TAB_COLORS = {
             '#F2F2F2': '#8A8FA0', // grey → slate
             '#FCD5B4': '#D48A4A', // peach/salmon → warm orange
+            '#D6E4F0': '#4A90C4', // light blue → stronger blue
             '#E2EFDA': '#5AAF5E', // green → stronger green
             '#FFF2CC': '#D4A843', // yellow → stronger amber
         };

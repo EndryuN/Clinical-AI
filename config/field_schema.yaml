@@ -81,7 +81,7 @@ groups:
         type: string
 
   - name: Baseline MRI
-    color: "#FFF2CC"
+    color: "#D6E4F0"
     description: "Baseline MRI imaging results"
     fields:
       - key: baseline_mri_date
@@ -117,7 +117,7 @@ groups:
 
   - name: Baseline CT
     llm_required: true
-    color: "#FFF2CC"
+    color: "#D6E4F0"
     description: "Baseline CT imaging results"
     fields:
       - key: baseline_ct_date

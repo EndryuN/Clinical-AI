@@ -86,6 +86,15 @@ def check_ollama() -> bool:
     return check_ollama_available()
 
 
+_stop_check = None  # Callable that returns True if extraction should abort
+
+
+def set_stop_check(fn):
+    """Set a callback that returns True when the LLM should abort mid-generation."""
+    global _stop_check
+    _stop_check = fn
+
+
 def generate(user_prompt: str, system_prompt: str = "") -> str:
     """Send a prompt to the selected LLM backend."""
     if _backend == "claude":
@@ -151,10 +160,27 @@ def _generate_ollama(user_prompt: str, system_prompt: str = "") -> str:
     # Sending think:false to qwen2.5 can break JSON format enforcement
     if is_thinking_model:
         payload["think"] = False
+    # Use streaming so we can abort on stop_requested
+    payload["stream"] = True
     try:
-        resp = _session.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=TIMEOUT)
+        resp = _session.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=TIMEOUT, stream=True)
         resp.raise_for_status()
-        return resp.json().get('message', {}).get('content', '')
+        content_parts = []
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            import json as _json
+            chunk = _json.loads(line)
+            msg = chunk.get('message', {}).get('content', '')
+            if msg:
+                content_parts.append(msg)
+            # Check if caller wants to abort (stop_requested flag)
+            if _stop_check and _stop_check():
+                resp.close()
+                return ''.join(content_parts)
+            if chunk.get('done'):
+                break
+        return ''.join(content_parts)
     except requests.ConnectionError:
         raise ConnectionError("Cannot connect to Ollama. Is it running? Start with: ollama serve")
     except requests.HTTPError as e:

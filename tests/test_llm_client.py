@@ -6,11 +6,12 @@ from extractor import llm_client
 
 
 def _mock_chat_response(content: str) -> MagicMock:
+    """Mock streaming Ollama response (iter_lines returns JSON chunks)."""
     mock = MagicMock()
     mock.status_code = 200
-    mock.json.return_value = {
-        "message": {"role": "assistant", "content": content}
-    }
+    # Streaming: iter_lines yields JSON lines, last has done=True
+    chunk = json.dumps({"message": {"content": content}, "done": True}).encode()
+    mock.iter_lines.return_value = [chunk]
     return mock
 
 

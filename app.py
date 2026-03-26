@@ -17,7 +17,8 @@ from flask import Flask, render_template, request, jsonify, Response, send_file,
 from models import ExtractionSession, PatientBlock, FieldResult
 from parser.docx_parser import parse_docx, get_raw_text
 from extractor.llm_client import (check_ollama, generate, get_backend, set_backend,
-    check_ollama_available, check_claude_available, list_ollama_models, get_ollama_model, set_ollama_model, SUGGESTED_MODELS)
+    check_ollama_available, check_claude_available, list_ollama_models, get_ollama_model, set_ollama_model, SUGGESTED_MODELS,
+    set_stop_check)
 from extractor.prompt_builder import build_prompt, build_all_prompts
 from extractor.clinical_context import get_context_for_group
 from extractor.response_parser import parse_llm_response
@@ -399,6 +400,9 @@ def stop_extraction():
 def _run_extraction(patient_limit=None, concurrency=1):
     import time
     from concurrent.futures import ThreadPoolExecutor
+
+    # Wire up stop check so LLM calls abort mid-generation
+    set_stop_check(lambda: session.stop_requested)
 
     groups = get_groups()
     llm_groups = [g for g in groups if g.get('llm_required', False)]

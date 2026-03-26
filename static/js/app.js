@@ -250,34 +250,27 @@ function listenProgress() {
             } else {
                 activePatientsList.innerHTML = active.map(([id, p]) => {
                     const isQueued = p.status === 'queued';
-                    // Timer: show LLM processing time (from llm_start), not queue time
                     const timerBase = (!isQueued && p.llm_start) ? p.llm_start : p.start;
                     const elapsed = Math.floor((Date.now() - (timerBase * 1000)) / 1000);
                     const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
                     const secs = (elapsed % 60).toString().padStart(2, '0');
-                    const accentColor = isQueued ? '#4b5563' : '#0d6efd';
                     const timerColor = isQueued ? '#6b7280' : '#f59e0b';
-                    const groupLabel = isQueued ? `Queued` : p.group || 'Starting...';
+                    const groupLabel = isQueued ? 'Queued' : p.group || 'Starting...';
                     const contextBadge = (!isQueued && p.has_context)
-                        ? `<span style="font-size:9px; background:#1e3a5f; color:#60a5fa; border:1px solid #2563eb; border-radius:3px; padding:1px 4px; margin-left:5px; vertical-align:middle;">G049</span>`
+                        ? `<span style="font-size:9px; background:#1e3a5f; color:#60a5fa; border:1px solid #2563eb; border-radius:3px; padding:1px 4px; margin-left:4px;">ctx</span>`
                         : '';
                     const groupsDone = p.groups_done || 0;
                     const groupsTotal = p.groups_total || 1;
                     const groupPct = Math.round(groupsDone / groupsTotal * 100);
-                    const miniBarColor = isQueued ? '#374151' : '#2563eb';
-                    const statusLabel = isQueued
-                        ? `<span style="font-size:9px; color:#6b7280;">QUEUED</span>`
-                        : `<span style="font-size:9px; color:#60a5fa;">${groupsDone}/${groupsTotal} groups</span>`;
-                    return `<div style="background:#111827; border:1px solid ${accentColor}; border-radius:6px; padding:8px 12px; min-width:160px; opacity:${isQueued ? '0.7' : '1'};">` +
-                           `<div style="font-size:12px; font-weight:700; color:#f0f0f0; letter-spacing:0.5px;">${p.initials || 'Patient'}</div>` +
-                           `<div style="font-size:10px; color:#9ca3af; margin-top:2px;">${groupLabel}${contextBadge}</div>` +
-                           `<div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:4px;">` +
-                           `<span style="font-size:14px; font-weight:700; color:${timerColor}; font-family:monospace;">${mins}:${secs}</span>` +
-                           `${statusLabel}` +
-                           `</div>` +
-                           `<div style="margin-top:6px; background:#1f2937; border-radius:3px; height:3px; overflow:hidden;">` +
-                           `<div style="width:${groupPct}%; height:100%; background:${miniBarColor}; transition:width 0.5s ease;"></div>` +
-                           `</div>` +
+                    const barColor = isQueued ? '#374151' : '#2563eb';
+                    const opacity = isQueued ? '0.5' : '1';
+                    return `<div style="display:flex; align-items:center; gap:12px; background:#111827; border-radius:4px; padding:6px 12px; margin-bottom:4px; opacity:${opacity};">` +
+                           `<span style="font-size:13px; font-weight:700; color:#f0f0f0; min-width:40px;">${p.initials || '...'}</span>` +
+                           `<span style="font-size:11px; color:#9ca3af; min-width:120px;">${groupLabel}${contextBadge}</span>` +
+                           `<span style="font-size:9px; color:#60a5fa; min-width:60px;">${groupsDone}/${groupsTotal} groups</span>` +
+                           `<div style="flex:1; background:#1f2937; border-radius:3px; height:3px; overflow:hidden;">` +
+                           `<div style="width:${groupPct}%; height:100%; background:${barColor}; transition:width 0.5s ease;"></div></div>` +
+                           `<span style="font-size:13px; font-weight:700; color:${timerColor}; font-family:monospace; min-width:50px; text-align:right;">${mins}:${secs}</span>` +
                            `</div>`;
                 }).join('');
             }

@@ -444,7 +444,7 @@ groups:
         type: date
 
   - name: Watch and Wait Dates
-    color: "#FFF2CC"
+    color: "#D6E4F0"
     description: "Longitudinal watch and wait surveillance dates (MRI and flexisigmoidoscopy)"
     fields:
       - key: ww_start_date

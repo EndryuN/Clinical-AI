@@ -382,7 +382,7 @@ pre {
 .cell-content[data-group="Baseline MRI"] { border-left: 3px solid #4A90C4; }
 .cell-content[data-group="Baseline CT"] { border-left: 3px solid #4A90C4; }
 .cell-content[data-group="Surgery"] { border-left: 3px solid #4A90C4; }
-.cell-content[data-group="Watch and Wait Dates"] { border-left: 3px solid #DDB63A; }
+.cell-content[data-group="Watch and Wait Dates"] { border-left: 3px solid #4A90C4; }
 
 /* ── Light theme preview ── */
 [data-bs-theme="light"] .preview-document {

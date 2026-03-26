@@ -130,17 +130,27 @@ def _generate_ollama(user_prompt: str, system_prompt: str = "") -> str:
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_prompt})
+
+    # Model-aware parameters
+    is_thinking_model = any(x in _ollama_model for x in ('qwen3:', 'qwen3.5:'))
+    is_large_model = any(x in _ollama_model for x in ('14b', '32b', '70b'))
+
     payload = {
         "model": _ollama_model,
         "stream": False,
-        "think": False,
         "format": "json",
         "options": {
-            "temperature": 0,
-            "num_ctx": 8192
+            "temperature": 0.1,   # Near-zero; avoids temp=0 edge case bugs
+            "seed": 42,           # Reproducible outputs
+            "num_ctx": 16384 if is_large_model else 8192,
         },
         "messages": messages
     }
+
+    # Only include think parameter for models that support it (qwen3+)
+    # Sending think:false to qwen2.5 can break JSON format enforcement
+    if is_thinking_model:
+        payload["think"] = False
     try:
         resp = _session.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=TIMEOUT)
         resp.raise_for_status()

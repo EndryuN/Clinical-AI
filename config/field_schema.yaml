@@ -1,6 +1,6 @@
 groups:
   - name: Demographics
-    color: "#A8A8A8"
+    color: "#F2F2F2"
     description: "Patient demographic information"
     fields:
       - key: dob
@@ -41,7 +41,7 @@ groups:
 
   - name: Endoscopy
     llm_required: true
-    color: "#6AB0E3"
+    color: "#D6E4F0"
     description: "Endoscopy procedure details"
     fields:
       - key: endoscopy_date
@@ -61,7 +61,7 @@ groups:
         type: text
 
   - name: Histology
-    color: "#7BC67E"
+    color: "#E2EFDA"
     description: "Biopsy and histology results"
     fields:
       - key: biopsy_result
@@ -81,7 +81,7 @@ groups:
         type: string
 
   - name: Baseline MRI
-    color: "#F0C75E"
+    color: "#FFF2CC"
     description: "Baseline MRI imaging results"
     fields:
       - key: baseline_mri_date
@@ -117,7 +117,7 @@ groups:
 
   - name: Baseline CT
     llm_required: true
-    color: "#F0C75E"
+    color: "#FFF2CC"
     description: "Baseline CT imaging results"
     fields:
       - key: baseline_ct_date
@@ -157,7 +157,7 @@ groups:
         type: text
 
   - name: MDT
-    color: "#A8A8A8"
+    color: "#F2F2F2"
     description: "MDT meeting decisions and treatment planning"
     fields:
       - key: first_mdt_date
@@ -192,7 +192,7 @@ groups:
         type: text
 
   - name: Chemotherapy
-    color: "#7BC67E"
+    color: "#E2EFDA"
     description: "Chemotherapy treatment details"
     fields:
       - key: chemo_goals
@@ -222,7 +222,7 @@ groups:
         type: text
 
   - name: Immunotherapy
-    color: "#7BC67E"
+    color: "#E2EFDA"
     description: "Immunotherapy treatment details"
     fields:
       - key: immuno_dates
@@ -237,7 +237,7 @@ groups:
         type: string
 
   - name: Radiotherapy
-    color: "#7BC67E"
+    color: "#E2EFDA"
     description: "Radiotherapy treatment details"
     fields:
       - key: radio_total_dose
@@ -262,7 +262,7 @@ groups:
         type: string
 
   - name: CEA and Clinical
-    color: "#7BC67E"
+    color: "#E2EFDA"
     description: "CEA markers and clinical examination"
     fields:
       - key: cea_date
@@ -288,7 +288,7 @@ groups:
 
   - name: Surgery
     llm_required: true
-    color: "#F0C75E"
+    color: "#FFF2CC"
     description: "Surgical intervention details"
     fields:
       - key: defunctioned
@@ -308,7 +308,7 @@ groups:
         type: text
 
   - name: Second MRI
-    color: "#A8A8A8"
+    color: "#F2F2F2"
     description: "Second MRI assessment results"
     fields:
       - key: second_mri_date
@@ -353,7 +353,7 @@ groups:
         type: string
 
   - name: 12-Week MRI
-    color: "#A8A8A8"
+    color: "#F2F2F2"
     description: "12-week MRI follow-up results"
     fields:
       - key: week12_mri_date
@@ -393,7 +393,7 @@ groups:
         type: string
 
   - name: Follow-up Flex Sig
-    color: "#A8A8A8"
+    color: "#F2F2F2"
     description: "Follow-up flexible sigmoidoscopy"
     fields:
       - key: flexsig_date
@@ -409,7 +409,7 @@ groups:
 
   - name: Watch and Wait
     llm_required: true
-    color: "#7BC67E"
+    color: "#E2EFDA"
     description: "Watch and wait surveillance programme"
     fields:
       - key: ww_entered_date
@@ -444,7 +444,7 @@ groups:
         type: date
 
   - name: Watch and Wait Dates
-    color: "#F0C75E"
+    color: "#FFF2CC"
     description: "Longitudinal watch and wait surveillance dates (MRI and flexisigmoidoscopy)"
     fields:
       - key: ww_start_date

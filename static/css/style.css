@@ -369,8 +369,8 @@ pre {
 .cell-content[data-group="Second MRI"] { border-left: 3px solid #B0B0B0; }
 .cell-content[data-group="12-Week MRI"] { border-left: 3px solid #B0B0B0; }
 .cell-content[data-group="Follow-up Flex Sig"] { border-left: 3px solid #B0B0B0; }
-/* Blue: Endoscopy */
-.cell-content[data-group="Endoscopy"] { border-left: 3px solid #6BA3D6; }
+/* Peach/Salmon: Endoscopy */
+.cell-content[data-group="Endoscopy"] { border-left: 3px solid #D48A4A; }
 /* Green: Histology, Chemo, Immuno, Radio, CEA, Watch and Wait */
 .cell-content[data-group="Histology"] { border-left: 3px solid #70AD47; }
 .cell-content[data-group="Chemotherapy"] { border-left: 3px solid #70AD47; }

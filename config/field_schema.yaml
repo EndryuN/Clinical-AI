@@ -41,7 +41,7 @@ groups:
 
   - name: Endoscopy
     llm_required: true
-    color: "#D6E4F0"
+    color: "#FCD5B4"
     description: "Endoscopy procedure details"
     fields:
       - key: endoscopy_date

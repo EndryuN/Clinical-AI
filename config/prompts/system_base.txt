@@ -1,8 +1,8 @@
 Extract clinical data from NHS MDT notes. Return ONLY valid JSON.
 
 Rules:
-- Return null if a value is not explicitly mentioned or clearly stated.
-- Do NOT infer or guess values from vague descriptions. Only extract what is directly stated.
+- Return null if a value is not mentioned and cannot be reasonably inferred.
+- If you infer a value from descriptive text (not a formal code), explain what text you based it on in the reason.
 - Dates in DD/MM/YYYY format.
 - Copy text verbatim where possible.
 - For each field return: value, reason (1 sentence), source_section (annotation marker or null).

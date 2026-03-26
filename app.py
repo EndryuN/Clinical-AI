@@ -324,6 +324,13 @@ def _import_excel(file_path: str) -> list:
         nhs_number = demo.get("nhs_number", FieldResult()).value or ''
         mrn = demo.get("mrn", FieldResult()).value or patient_id
 
+        # If initials look wrong (contain digits = probably "62 DAY TARGET" bug),
+        # try extracting from unique_id (format: DDMMYYYY_INITIALS_G_disambig)
+        if initials and any(c.isdigit() for c in initials) and unique_id and '_' in unique_id:
+            parts = unique_id.split('_')
+            if len(parts) >= 2:
+                initials = parts[1]
+
         raw_cells = rawcells_lookup.get(lookup_key, [])
         c_map = coverage_map_lookup.get(lookup_key, {})
         c_pct = coverage_lookup.get(lookup_key)

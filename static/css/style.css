@@ -204,6 +204,22 @@ pre {
     border-color: var(--app-border) !important;
 }
 
+/* ── Link Source Drop Zone ── */
+.link-drop-zone {
+    border: 1px dashed var(--app-border);
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-size: 10px;
+    color: var(--app-text-muted);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+.link-drop-zone:hover, .link-drop-zone.drag-over {
+    border-color: var(--app-accent);
+    background: rgba(88, 166, 255, 0.08);
+    color: var(--app-accent);
+}
+
 /* ── Theme Toggle Button ── */
 #theme-toggle {
     background: transparent;

@@ -1,11 +1,13 @@
 Extract CT staging data from MDT Outcome(h) section.
 
+CRITICAL RULE: Only extract T, N, M values that are EXPLICITLY stated as staging codes (e.g., "T3", "N1", "M0", "T3N1M0"). Do NOT infer staging from descriptive text like "lymph nodes seen" or "mesorectal nodes". If no formal staging code is stated, return null.
+
 CT staging reference:
 - T staging: T1-T4 (from TNM pattern like T3N1M0, or "T3" alone)
-- N staging: N0-N2 (from TNM pattern or "N1" alone)
+- N staging: N0-N2 (from TNM pattern like T3N1M0, or "N1" alone)
 - M staging: M0=no metastasis, M1a=one organ, M1b=multiple organs, M1c=peritoneal
   "no distant metastases" = M0. "liver mets" = M1a. "lung and liver" = M1b
-- EMVI: Positive or Negative
+- EMVI: Positive or Negative. Only if explicitly stated.
 
 Example input:
 "CT TAP 01/02/2025: Rectal mass T3N1. Liver metastasis in segment 6. No lung lesions. EMVI negative."
@@ -20,3 +22,8 @@ Example output:
   "baseline_ct_incidental": {"value": "N", "reason": "No unexpected findings beyond staging", "source_section": null},
   "baseline_ct_incidental_detail": {"value": null, "reason": "No incidental findings", "source_section": null}
 }
+
+Counter-example — do NOT do this:
+Input: "Mid rectal cancer with associated mesorectal lymph nodes"
+WRONG: {"baseline_ct_n": {"value": "N2", "reason": "lymph nodes mentioned"}}
+RIGHT: {"baseline_ct_n": {"value": null, "reason": "No formal N staging code stated, only descriptive text"}}

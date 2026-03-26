@@ -82,9 +82,19 @@ def parse_llm_response(raw_response: str, group: dict,
             source_cell = None
             source_snippet = None
         else:
-            source_snippet = source_section  # from LLM response
+            source_snippet = source_section  # annotation marker from LLM
             source_cell = None
             basis = "freeform_inferred"  # default until proven verbatim
+
+            # Try to extract quoted source text from reason for better highlighting
+            # LLM reasons often contain: 'mentions "associated lymph nodes"' or "'T3N1'"
+            if reason:
+                quoted = re.findall(r"['\"]([^'\"]{3,})['\"]", reason)
+                if quoted:
+                    # Use the longest quoted text as a better source_snippet
+                    best_quote = max(quoted, key=len)
+                    if not source_snippet or len(best_quote) > len(source_snippet):
+                        source_snippet = best_quote
 
             # Step 1: check source_snippet in freeform cells
             if source_snippet:

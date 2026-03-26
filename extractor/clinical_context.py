@@ -29,7 +29,8 @@ _MRI_N = """MRI Nodal (mrN) staging — radiological estimate:
 - mrN0: no suspicious lymph nodes
 - mrN1: 1-3 suspicious mesorectal lymph nodes (mixed signal, irregular border, >5mm)
 - mrN2: 4 or more suspicious lymph nodes
-Common text: "N0", "N1", "N2". If text says "no lymphadenopathy" = N0."""
+Common text: "N0", "N1", "N2". If text says "no lymphadenopathy" = N0.
+IMPORTANT: Only assign N staging if a formal N value (N0/N1/N2) is stated. Do NOT infer N staging from descriptive text like "lymph nodes present" — return null instead."""
 
 _CT_M = """CT Metastasis (M) staging:
 - M0: no distant metastasis on imaging

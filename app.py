@@ -506,8 +506,12 @@ def _run_extraction(patient_limit=None, concurrency=1):
                             llm_fr.reason = f"[LLM] {llm_fr.reason}"
                             patient.extractions[group['name']][key] = llm_fr
                 except Exception as e:
+                    print(f"  ! {patient.initials or patient.id} / {group['name']}: ERROR — {e}")
                     log_event('llm_extraction_error', patient_id=patient.id, group=group['name'], error=str(e))
-                llm_processing_time += time.time() - group_start
+                group_elapsed = time.time() - group_start
+                llm_processing_time += group_elapsed
+                if group_elapsed > 120:
+                    print(f"  ! {patient.initials or patient.id} / {group['name']}: SLOW — {round(group_elapsed)}s")
             session.progress['active_patients'][patient.id]['groups_done'] += 1
 
         session.progress['active_patients'].pop(patient.id, None)

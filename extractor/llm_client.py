@@ -163,14 +163,20 @@ def _generate_ollama(user_prompt: str, system_prompt: str = "") -> str:
     # Use streaming so we can abort on stop_requested
     payload["stream"] = True
     try:
-        resp = _session.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=TIMEOUT, stream=True)
+        # Connection timeout + read timeout (per chunk)
+        resp = _session.post(f"{OLLAMA_URL}/api/chat", json=payload,
+                            timeout=(30, TIMEOUT), stream=True)
         resp.raise_for_status()
         content_parts = []
+        import json as _json
+        start = __import__('time').time()
         for line in resp.iter_lines():
             if not line:
                 continue
-            import json as _json
-            chunk = _json.loads(line)
+            try:
+                chunk = _json.loads(line)
+            except _json.JSONDecodeError:
+                continue
             msg = chunk.get('message', {}).get('content', '')
             if msg:
                 content_parts.append(msg)
@@ -179,6 +185,10 @@ def _generate_ollama(user_prompt: str, system_prompt: str = "") -> str:
                 resp.close()
                 return ''.join(content_parts)
             if chunk.get('done'):
+                break
+            # Safety: abort if single generation exceeds timeout
+            if __import__('time').time() - start > TIMEOUT:
+                resp.close()
                 break
         return ''.join(content_parts)
     except requests.ConnectionError:

@@ -1,0 +1,163 @@
+<!-- templates/settings.html -->
+{% extends "base.html" %}
+{% block title %}MDT Extractor — Field Settings{% endblock %}
+{% block content %}
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-0">Field Configuration</h4>
+                <p class="text-muted small mb-0">Define allowed values per field to improve extraction accuracy</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="/export/consultation" class="btn btn-outline-info btn-sm">Export Consult Sheet</a>
+                <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('import-consult').click()">
+                    Import Consult Sheet
+                </button>
+                <input type="file" id="import-consult" class="d-none" accept=".xlsx" onchange="importConsultation(this.files[0])">
+                <button class="btn btn-success btn-sm" onclick="saveAllOverrides()">Save All Changes</button>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <input type="text" class="form-control form-control-sm bg-dark text-light"
+                   placeholder="Search fields..." id="field-search"
+                   oninput="filterFields(this.value)" style="max-width:300px;">
+        </div>
+
+        <div class="table-responsive" style="max-height: calc(100vh - 200px); overflow-y: auto;">
+            <table class="table table-dark table-sm table-hover" id="settings-table">
+                <thead class="sticky-top" style="z-index:1;">
+                    <tr>
+                        <th style="width:15%">Field Key</th>
+                        <th style="width:20%">Header</th>
+                        <th style="width:10%">Group</th>
+                        <th style="width:10%">Type</th>
+                        <th style="width:35%">Allowed Values</th>
+                        <th style="width:10%">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="settings-body">
+                    <tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="save-status" class="d-none alert alert-success mt-2 py-1 small"></div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let fieldData = [];
+let overrides = {};
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Load schema + overrides
+    Promise.all([
+        fetch('/schema').then(r => r.json()),
+        fetch('/settings/overrides').then(r => r.json()),
+    ]).then(([groups, ov]) => {
+        overrides = ov || {};
+        fieldData = [];
+        groups.forEach(g => {
+            (g.fields || []).forEach(f => {
+                fieldData.push({key: f, group: g.name, color: g.color});
+            });
+        });
+        renderTable();
+    });
+});
+
+function renderTable(filter) {
+    const tbody = document.getElementById('settings-body');
+    const filterLower = (filter || '').toLowerCase();
+
+    const rows = fieldData.filter(f => {
+        if (!filterLower) return true;
+        return f.key.toLowerCase().includes(filterLower) ||
+               f.group.toLowerCase().includes(filterLower);
+    }).map(f => {
+        const ov = overrides[f.key] || {};
+        const hasOverride = ov.type || (ov.allowed_values && ov.allowed_values.length > 0);
+        const typeOptions = ['string', 'date', 'text', 'number', 'boolean', 'dropdown']
+            .map(t => `<option value="${t}" ${(ov.type || 'string') === t ? 'selected' : ''}>${t}</option>`)
+            .join('');
+        const allowedStr = (ov.allowed_values || []).join(', ');
+
+        return `<tr data-key="${f.key}">
+            <td><code class="small">${f.key}</code></td>
+            <td class="small">${f.key}</td>
+            <td><span class="badge" style="background:${f.color};font-size:10px;">${f.group}</span></td>
+            <td>
+                <select class="form-select form-select-sm bg-dark text-light border-secondary"
+                        onchange="updateOverride('${f.key}','type',this.value)"
+                        style="font-size:11px;padding:2px 4px;">
+                    ${typeOptions}
+                </select>
+            </td>
+            <td>
+                <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
+                       value="${allowedStr}" placeholder="e.g. Positive, Negative"
+                       onchange="updateOverride('${f.key}','allowed_values',this.value)"
+                       style="font-size:11px;">
+            </td>
+            <td>${hasOverride ? '<span class="badge bg-success">Configured</span>' : '<span class="badge bg-secondary">Default</span>'}</td>
+        </tr>`;
+    }).join('');
+
+    tbody.innerHTML = rows || '<tr><td colspan="6" class="text-center text-muted py-4">No fields match</td></tr>';
+}
+
+function filterFields(text) {
+    renderTable(text);
+}
+
+function updateOverride(key, prop, value) {
+    if (!overrides[key]) overrides[key] = {};
+    if (prop === 'allowed_values') {
+        overrides[key].allowed_values = value.split(',').map(v => v.trim()).filter(v => v);
+    } else {
+        overrides[key][prop] = value;
+    }
+    // Remove empty overrides
+    if (!overrides[key].type && (!overrides[key].allowed_values || overrides[key].allowed_values.length === 0)) {
+        delete overrides[key];
+    }
+    renderTable(document.getElementById('field-search').value);
+}
+
+function saveAllOverrides() {
+    fetch('/settings/overrides', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(overrides)
+    }).then(r => r.json()).then(data => {
+        const status = document.getElementById('save-status');
+        status.textContent = 'Saved ' + (data.fields_saved || 0) + ' field overrides to config/field_overrides.yaml';
+        status.classList.remove('d-none');
+        setTimeout(() => status.classList.add('d-none'), 3000);
+    });
+}
+
+function importConsultation(file) {
+    const form = new FormData();
+    form.append('file', file);
+    fetch('/import/consultation', {method: 'POST', body: form})
+        .then(r => r.json())
+        .then(data => {
+            if (data.overrides) {
+                overrides = data.overrides;
+                renderTable();
+                const status = document.getElementById('save-status');
+                status.textContent = 'Imported ' + (data.fields_updated || 0) + ' field overrides from consultation sheet';
+                status.classList.remove('d-none');
+                setTimeout(() => status.classList.add('d-none'), 3000);
+            } else {
+                alert(data.error || 'Import failed');
+            }
+        })
+        .catch(err => alert('Import failed: ' + err));
+}
+</script>
+{% endblock %}

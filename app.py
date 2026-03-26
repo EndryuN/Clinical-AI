@@ -919,6 +919,26 @@ def analytics_page():
     return render_template('analytics.html', session_active=bool(session.patients))
 
 
+@app.route('/settings')
+def settings_page():
+    return render_template('settings.html', session_active=bool(session.patients))
+
+
+@app.route('/settings/overrides', methods=['GET', 'POST'])
+def settings_overrides():
+    """GET: return current overrides. POST: save new overrides."""
+    from config import load_overrides, save_overrides
+    if request.method == 'GET':
+        return jsonify(load_overrides())
+    else:
+        new_overrides = request.get_json()
+        if not isinstance(new_overrides, dict):
+            return jsonify({"error": "Expected JSON object"}), 400
+        save_overrides(new_overrides)
+        log_event('overrides_saved', fields_saved=len(new_overrides))
+        return jsonify({"status": "ok", "fields_saved": len(new_overrides)})
+
+
 @app.route('/schema')
 def schema():
     """Return schema groups with colours and field keys for the frontend."""

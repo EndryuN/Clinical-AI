@@ -1219,7 +1219,17 @@ def _confidence_summary(patient):
 
 
 if __name__ == '__main__':
-    import sys
+    import sys, logging
+
+    # Suppress noisy polling requests from the console log
+    class QuietFilter(logging.Filter):
+        _QUIET = ('/status', '/progress', '/backend')
+        def filter(self, record):
+            msg = record.getMessage()
+            return not any(p in msg for p in self._QUIET)
+
+    logging.getLogger('werkzeug').addFilter(QuietFilter())
+
     port = 5000
     if '--port' in sys.argv:
         port = int(sys.argv[sys.argv.index('--port') + 1])

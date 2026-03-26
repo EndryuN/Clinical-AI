@@ -143,3 +143,45 @@ def compute_coverage(patient: PatientBlock) -> None:
         "inferred_fields": inferred_count,  # number of fields inferred (not in source)
         "total_chars": total_chars,
     }
+
+
+def recompute_coverage_stats(patient: PatientBlock) -> None:
+    """Recompute coverage_stats from an already-populated coverage_map.
+
+    Used after Excel import where coverage_map spans are restored but
+    coverage_stats was not persisted.
+    """
+    if not patient.coverage_map:
+        return
+
+    total_used = 0
+    total_unused = 0
+    for spans in patient.coverage_map.values():
+        for span in spans:
+            length = span["end"] - span["start"]
+            if span.get("used"):
+                total_used += length
+            else:
+                total_unused += length
+
+    total_chars = total_used + total_unused
+    if total_chars == 0:
+        return
+
+    # Count inferred fields
+    inferred_count = 0
+    for group_name, fields in patient.extractions.items():
+        for field_key, fr in fields.items():
+            if fr.value is not None and fr.confidence_basis == "freeform_inferred":
+                inferred_count += 1
+
+    used_pct = round(total_used / total_chars * 100, 1)
+    unused_pct = round(total_unused / total_chars * 100, 1)
+
+    patient.coverage_pct = used_pct
+    patient.coverage_stats = {
+        "used_pct": used_pct,
+        "unused_pct": unused_pct,
+        "inferred_fields": inferred_count,
+        "total_chars": total_chars,
+    }

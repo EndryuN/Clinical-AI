@@ -214,9 +214,17 @@ def _extract_demographics(text: str) -> dict:
     if m:
         result['dob'] = (m.group(1), m.group(0))
 
-    # Initials - from name marked with (b) or the all-caps name
+    # Initials - from name marked with (b), explicit "Name:", all-caps, or positional
     name_match = re.search(r'([A-Z][A-Za-z\'\-]+(?:\s+[A-Za-z\'\-]+)+)\s*\(b\)', text)
     raw_name_span = None
+    if not name_match:
+        # Try explicit "Name: <value>" prefix
+        name_prefix = re.search(r'Name:\s*([^\n]+)', text)
+        if name_prefix:
+            candidate = re.sub(r'\([a-z]\)', '', name_prefix.group(1)).strip()
+            if candidate and ' ' in candidate:
+                raw_name_span = candidate
+                name_match = type('', (), {'group': lambda self, x: candidate})()
     if not name_match:
         # Try all-caps name line (skip medical/document keywords)
         _NOT_NAME = {'DAY', 'TARGET', 'BREACH', 'DATE', 'PATHWAY', 'PLEASE', 'TREATMENT',
@@ -224,7 +232,7 @@ def _extract_demographics(text: str) -> dict:
                      'NOTE', 'NUMBER', 'HOSPITAL', 'NHS', 'CANCER', 'PATIENT', 'DETAILS'}
         for line in text.split('\n'):
             cleaned = re.sub(r'\([a-z]\)', '', line).strip()
-            if cleaned and len(cleaned) > 3 and ' ' in cleaned:
+            if cleaned and len(cleaned) > 3 and ' ' in cleaned and not re.search(r'\d', cleaned):
                 if cleaned.replace(' ', '').replace("'", '').replace('-', '').isupper():
                     words = cleaned.upper().split()
                     if any(w in _NOT_NAME for w in words):
@@ -232,6 +240,25 @@ def _extract_demographics(text: str) -> dict:
                     raw_name_span = cleaned
                     name_match = type('', (), {'group': lambda self, x: cleaned})()
                     break
+    if not name_match:
+        # Positional fallback: first name-like line after NHS Number line
+        lines = [ln.strip() for ln in text.split('\n') if ln.strip()]
+        past_nhs = False
+        for line in lines:
+            cleaned = re.sub(r'\([a-z]\)', '', line).strip()
+            if re.match(r'NHS\s*Number', cleaned, re.IGNORECASE):
+                past_nhs = True
+                continue
+            if not past_nhs:
+                continue
+            if re.match(r'(?:Male|Female|Gender)', cleaned, re.IGNORECASE):
+                continue
+            if re.search(r'\d', cleaned):
+                continue
+            if ' ' in cleaned and ':' not in cleaned and len(cleaned) > 3:
+                raw_name_span = cleaned
+                name_match = type('', (), {'group': lambda self, x: cleaned})()
+                break
     if name_match:
         if raw_name_span is not None:
             # All-caps fallback: group(0) == group(1) == cleaned line

@@ -23,7 +23,7 @@ from extractor.prompt_builder import build_prompt, build_all_prompts
 from extractor.clinical_context import get_context_for_group
 from extractor.response_parser import parse_llm_response
 from extractor.regex_extractor import regex_extract, assign_unique_id
-from extractor.coverage import compute_coverage
+from extractor.coverage import compute_coverage, recompute_coverage_stats
 from extractor.preview_renderer import render_patient_preview
 from export.excel_writer import write_excel
 from config import get_groups, get_all_fields
@@ -339,7 +339,7 @@ def _import_excel(file_path: str) -> list:
         c_map = coverage_map_lookup.get(lookup_key, {})
         c_pct = coverage_lookup.get(lookup_key)
 
-        patients.append(PatientBlock(
+        pb = PatientBlock(
             id=mrn,
             unique_id=unique_id,
             initials=initials,
@@ -349,7 +349,10 @@ def _import_excel(file_path: str) -> list:
             raw_cells=raw_cells,
             coverage_map=c_map,
             coverage_pct=c_pct,
-        ))
+        )
+        if c_map:
+            recompute_coverage_stats(pb)
+        patients.append(pb)
 
     wb.close()
 

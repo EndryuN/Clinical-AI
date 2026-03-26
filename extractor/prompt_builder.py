@@ -47,6 +47,8 @@ _GROUP_SECTIONS = {
     'Second MRI':       ['(h)'],
     '12-Week MRI':      ['(h)'],
     'MDT':              ['(h)', '(i)'],
+    'MDT 6-Week':       ['(h)'],
+    'MDT 12-Week':      ['(h)'],
     'Chemotherapy':     ['(h)'],
     'Immunotherapy':    ['(h)'],
     'Radiotherapy':     ['(h)'],
@@ -104,15 +106,22 @@ def build_prompt(patient_text: str, group: dict) -> tuple[str, str]:
     """
     group_name = group['name']
 
-    # Build field list with allowed values from overrides
+    # Build field list with column description + extraction hint + allowed values
     field_lines = []
     for f in group['fields']:
         override = get_field_override(f['key'])
         allowed = override.get('allowed_values', [])
+        # Start with the doctor's column description (excel_header)
+        header = f.get('excel_header', '').replace(f"{group_name}: ", '', 1).strip()
         hint = f['prompt_hint']
+        # Combine: column description first, then extraction instruction
+        parts = []
+        if header and header.lower() != f['key']:
+            parts.append(f"[{header}]")
+        parts.append(hint)
         if allowed:
-            hint += f" MUST be one of: {', '.join(allowed)}, or null."
-        field_lines.append(f"- {f['key']}: {hint}")
+            parts.append(f"MUST be one of: {', '.join(allowed)}, or null.")
+        field_lines.append(f"- {f['key']}: {' '.join(parts)}")
     field_list = '\n'.join(field_lines)
 
     # JSON format example

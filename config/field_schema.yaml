@@ -170,26 +170,6 @@ groups:
         excel_header: "1st MDT: Treatment approach"
         prompt_hint: "The FULL text after 'Outcome:' in the MDT Outcome(h) section. Copy the complete management plan verbatim — this includes all recommended actions, not just a category name like 'TNT'."
         type: text
-      - key: mdt_6week_date
-        excel_column: 55
-        excel_header: "MDT (after 6 week): Date"
-        prompt_hint: "Date of MDT meeting after 6-week assessment. Format: DD/MM/YYYY"
-        type: date
-      - key: mdt_6week_decision
-        excel_column: 56
-        excel_header: "MDT (after 6 week): Decision"
-        prompt_hint: "MDT decision after 6-week assessment"
-        type: text
-      - key: mdt_12week_date
-        excel_column: 66
-        excel_header: "MDT (after 12 week): Date"
-        prompt_hint: "Date of MDT meeting after 12-week assessment. Format: DD/MM/YYYY"
-        type: date
-      - key: mdt_12week_decision
-        excel_column: 67
-        excel_header: "MDT (after 12 week): Decision"
-        prompt_hint: "MDT decision after 12-week assessment"
-        type: text
 
   - name: Chemotherapy
     color: "#E2EFDA"
@@ -352,6 +332,21 @@ groups:
         prompt_hint: "Tumour Regression Grade on second MRI (1-5)"
         type: string
 
+  - name: MDT 6-Week
+    color: "#F2F2F2"
+    description: "MDT meeting after 6-week assessment"
+    fields:
+      - key: mdt_6week_date
+        excel_column: 55
+        excel_header: "MDT (after 6 week): Date"
+        prompt_hint: "Date of MDT meeting after 6-week assessment. Format: DD/MM/YYYY"
+        type: date
+      - key: mdt_6week_decision
+        excel_column: 56
+        excel_header: "MDT (after 6 week): Decision"
+        prompt_hint: "MDT decision after 6-week assessment"
+        type: text
+
   - name: 12-Week MRI
     color: "#F2F2F2"
     description: "12-week MRI follow-up results"
@@ -405,6 +400,21 @@ groups:
         excel_column: 65
         excel_header: "Flex sig: Findings"
         prompt_hint: "Findings from follow-up flexible sigmoidoscopy"
+        type: text
+
+  - name: MDT 12-Week
+    color: "#F2F2F2"
+    description: "MDT meeting after 12-week assessment"
+    fields:
+      - key: mdt_12week_date
+        excel_column: 66
+        excel_header: "MDT (after 12 week): Date"
+        prompt_hint: "Date of MDT meeting after 12-week assessment. Format: DD/MM/YYYY"
+        type: date
+      - key: mdt_12week_decision
+        excel_column: 67
+        excel_header: "MDT (after 12 week): Decision"
+        prompt_hint: "MDT decision after 12-week assessment"
         type: text
 
   - name: Watch and Wait

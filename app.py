@@ -1050,18 +1050,26 @@ def _get_field_value(patient, group_name, field_key):
 
 def _get_cancer_type(patient):
     import re
-    # 1. Extract from Diagnosis line (e.g., "Diagnosis: ADENOCARCINOMA, NOT OTHERWISE SPECIFIED")
+    # 1. Extract from Diagnosis line in raw_text
     m = re.search(r'Diagnosis:\s*([A-Za-z][A-Za-z\s\-]+?)(?:\s*[,()\n]|$)', patient.raw_text)
     if m:
         diag = m.group(1).strip()
         if not diag.upper().startswith('ICD'):
             diag = re.split(r',\s*', diag)[0].strip()
             return diag.title()
-    # 2. Fallback: try the LLM-extracted biopsy_result
+    # 2. Search raw_cells (works on Excel import where raw_text is placeholder)
+    for cell in patient.raw_cells:
+        m = re.search(r'Diagnosis:\s*([A-Za-z][A-Za-z\s\-]+?)(?:\s*[,()\n]|$)', cell.get('text', ''))
+        if m:
+            diag = m.group(1).strip()
+            if not diag.upper().startswith('ICD'):
+                diag = re.split(r',\s*', diag)[0].strip()
+                return diag.title()
+    # 3. Fallback: try the LLM-extracted biopsy_result
     biopsy = _get_field_value(patient, "Histology", "biopsy_result")
     if biopsy and biopsy.lower() not in ('missing', 'n/a', 'null'):
         return biopsy.split(',')[0].strip().title()
-    # 3. No diagnosis yet
+    # 4. No diagnosis yet
     return "Pending Diagnosis"
 
 

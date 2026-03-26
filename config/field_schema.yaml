@@ -288,7 +288,7 @@ groups:
 
   - name: Surgery
     llm_required: true
-    color: "#FFF2CC"
+    color: "#D6E4F0"
     description: "Surgical intervention details"
     fields:
       - key: defunctioned

@@ -683,7 +683,7 @@ function renderFieldTable(fields, groupName) {
         return `
         <tr class="${isPending ? 'pending-row' : ''}" style="border-left: 4px solid ${groupColor}; ${rowBg} cursor:pointer; border-bottom: none;"
             data-fr="${safeFrData}" onclick="highlightSource(JSON.parse(this.dataset.fr))">
-            <td class="small" style="color: ${hasValue ? '#c9d1d9' : '#555'};" title="${key}">${(fieldHeaders[key] || key).replace(/^[^:]+:\s*/, '')}</td>
+            <td class="small" style="color: ${hasValue ? '#c9d1d9' : '#555'}; max-width:200px; word-wrap:break-word;" title="${key}">${(fieldHeaders[key] || key).replace(/^[^:]+:\s*/, '')}</td>
             <td>
                 <input type="text" class="form-control form-control-sm bg-dark text-light border-${confClass}"
                        value="${safeValue}" placeholder="${hasValue ? '' : 'Enter value...'}"

@@ -101,8 +101,22 @@ def render_html_preview(patient) -> str:
     # Coverage map
     cov_map = patient.coverage_map or {}
 
-    # Meeting date
+    # Meeting date — try patient.mdt_date first, fall back to extracted first_mdt_date,
+    # then check raw_cells synthetic row -1
     meeting_date = patient.mdt_date or ""
+    if not meeting_date:
+        mdt_fr = (patient.extractions.get("MDT", {}).get("first_mdt_date")
+                  or patient.extractions.get("Demographics", {}).get("first_mdt_date"))
+        if mdt_fr and mdt_fr.value:
+            meeting_date = mdt_fr.value
+    if not meeting_date:
+        for c in patient.raw_cells:
+            if c['row'] == -1 and 'MDT Meeting Date' in c.get('text', ''):
+                import re as _re
+                m = _re.search(r'(\d{1,2}/\d{1,2}/\d{4})', c['text'])
+                if m:
+                    meeting_date = m.group(1)
+                break
     meeting_text = f"MDT Meeting: {meeting_date}" if meeting_date else "MDT Meeting Date: —"
 
     # Section labels from headers

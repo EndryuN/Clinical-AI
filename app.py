@@ -284,10 +284,15 @@ def _import_excel(file_path: str) -> list:
         nhs_schema_col = next((f['excel_column'] for f in all_fields if f['key'] == 'nhs_number'), 4)
         mrn_val = ws.cell(row=row_idx, column=mrn_schema_col + field_offset).value
         nhs_val = ws.cell(row=row_idx, column=nhs_schema_col + field_offset).value
-        if not mrn_val and not nhs_val:
+        unique_id_raw = ws.cell(row=row_idx, column=1).value if has_uid_col else None
+        unique_id = str(unique_id_raw).strip() if unique_id_raw else ''
+        # Valid unique_id must contain underscore (format: DDMMYYYY_XX_G_disambig)
+        has_valid_uid = bool(unique_id and '_' in unique_id)
+
+        # Skip rows without any patient identifier
+        if not mrn_val and not nhs_val and not has_valid_uid:
             continue
 
-        unique_id = str(ws.cell(row=row_idx, column=1).value or '').strip() if has_uid_col else ''
         patient_id = str(mrn_val).strip() if mrn_val else f"patient_{row_idx - 1:03d}"
         lookup_key = unique_id or patient_id
 

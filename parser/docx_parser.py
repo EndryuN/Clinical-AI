@@ -67,10 +67,17 @@ def _extract_name(details_text: str) -> str:
 
     lines = [ln.strip() for ln in details_text.splitlines() if ln.strip()]
     # Strategy 2: all-caps line (could have annotation suffix like "(b)")
+    # Skip lines that look like medical data, not names
+    _NOT_NAME = {'DAY', 'TARGET', 'BREACH', 'DATE', 'PATHWAY', 'PLEASE', 'TREATMENT',
+                 'DECISION', 'STAGING', 'DIAGNOSIS', 'CLINICAL', 'MDT', 'OUTCOME',
+                 'NOTE', 'NUMBER', 'HOSPITAL', 'NHS'}
     for line in lines:
         cleaned = _clean(line)
         if cleaned and cleaned.replace(' ', '').replace("'", '').replace('-', '').isupper():
-            return cleaned
+            words = cleaned.upper().split()
+            # If any word is a known non-name keyword, skip this line
+            if not any(w in _NOT_NAME for w in words):
+                return cleaned
 
     # Strategy 3: third non-empty line
     # lines[0] ~ "Hospital Number: ..."

@@ -679,10 +679,12 @@ function renderFieldTable(fields, groupName) {
                          fr.confidence === 'none' ? 'N/A' : (fr.confidence || 'low').toUpperCase();
         const safeValue = (fr.value || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const editedBadge = fr.edited ? '<span class="badge bg-info ms-1" style="font-size:9px">EDITED</span>' : '';
+        const usedContext = (fr.reason || '').includes('[REF]') || (fr.reason || '').includes('[G049]');
+        const ctxBadge = usedContext ? '<span class="badge ms-1" style="font-size:9px;background:#6f42c1;color:#fff" title="Used clinical reference context">ctx</span>' : '';
         const safeReason = (fr.reason || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const inputBorder = isInferred ? 'border-color: #f97316 !important;' : '';
         const rowBg = isInferred ? 'background-color: rgba(249,115,22,0.05);' : '';
-        const frData = JSON.stringify({value: fr.value, confidence: fr.confidence, source_cell: fr.source_cell || null, source_snippet: fr.source_snippet || null});
+        const frData = JSON.stringify({value: fr.value, confidence: fr.confidence, confidence_basis: fr.confidence_basis || '', source_cell: fr.source_cell || null, source_snippet: fr.source_snippet || null});
         const safeFrData = frData.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         const reasonRow = (safeReason && confText !== 'EMPTY' && confText !== 'N/A')
             ? `<tr style="border-left: 4px solid ${groupColor}; border-top: none;">
@@ -703,7 +705,7 @@ function renderFieldTable(fields, groupName) {
             </td>
             <td class="text-center" style="min-width: 140px;">
                 <span class="badge bg-${confClass}" style="font-size:10px; ${confStyle}">${confText}</span>
-                ${editedBadge}
+                ${editedBadge}${ctxBadge}
                 ${fr.source_cell ? '<span class="source-link badge bg-light text-secondary border ms-1" data-row="' + fr.source_cell.row + '" data-col="' + fr.source_cell.col + '" style="cursor:pointer;font-size:9px" title="Click to highlight source cell">src</span>' : (hasValue ? '<span class="badge bg-light text-muted border ms-1" style="font-size:9px" title="Source cell not available">no src</span>' : '')}
             </td>
         </tr>${reasonRow}`;

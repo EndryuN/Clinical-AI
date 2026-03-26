@@ -424,6 +424,9 @@ def _run_extraction(patient_limit=None, concurrency=1):
     session.progress['active_patients'] = {}
     session.progress['completed_patients'] = []
     session.progress['start_time'] = time.time()
+    from extractor.llm_client import get_ollama_model
+    model = get_ollama_model() if get_backend() == 'ollama' else 'claude-api'
+    print(f"\n=== Extraction started: {len(patients_to_process)} patients, model={model}, concurrency={concurrency} ===")
 
     _counter_lock = threading.Lock()
     llm_semaphore = threading.Semaphore(concurrency)
@@ -526,6 +529,7 @@ def _run_extraction(patient_limit=None, concurrency=1):
                 "id": patient.id, "initials": patient.initials,
                 "confidence_summary": conf, "seconds": llm_seconds, "llm_seconds": llm_seconds,
             })
+            print(f"  [{completed_count}/{session.progress['total']}] {patient.initials or patient.id} — {conf['high']}H {conf['medium']}M {conf['low']}L — {llm_seconds}s")
 
     with ThreadPoolExecutor(max_workers=max(1, min(concurrency, 3))) as ex:
         list(ex.map(process_patient, patients_to_process))
@@ -539,6 +543,10 @@ def _run_extraction(patient_limit=None, concurrency=1):
 
     session.status = 'complete' if not session.stop_requested else 'stopped'
     session.progress['phase'] = 'complete'
+    elapsed = round(time.time() - session.progress['start_time'], 1)
+    avg = session.progress.get('throughput_seconds', 0)
+    status = 'STOPPED' if session.stop_requested else 'COMPLETE'
+    print(f"=== Extraction {status}: {session.progress['llm_complete']}/{session.progress['total']} patients in {elapsed}s (avg {avg}s/patient) ===")
 
     # Save benchmark results for model comparison
     _save_benchmark(session.progress.get('completed_patients', []))

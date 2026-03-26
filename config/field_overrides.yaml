@@ -1,0 +1,12 @@
+# Field Overrides — Doctor-defined types and allowed values
+# This file is the ground truth for field configuration.
+# Updated by importing a filled consultation Excel or via the settings page.
+# Committed to git for version control.
+#
+# Format:
+# overrides:
+#   field_key:
+#     type: dropdown|date|text|number|boolean
+#     allowed_values: ["Value1", "Value2"]
+#
+overrides: {}

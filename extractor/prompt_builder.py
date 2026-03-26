@@ -1,5 +1,5 @@
 # extractor/prompt_builder.py
-from config import get_groups
+from config import get_groups, get_field_override
 from extractor.clinical_context import get_context_for_group, ABBREVIATIONS
 
 _SYSTEM_TEMPLATE = """You are a clinical data extraction assistant specialising in NHS MDT (Multidisciplinary Team Meeting) outcome proformas for colorectal cancer patients.
@@ -44,9 +44,15 @@ def build_prompt(patient_text: str, group: dict) -> tuple[str, str]:
     """Build system and user prompts for a specific schema group.
     Returns (system_prompt, user_prompt).
     """
-    field_list = "\n".join(
-        f"- {f['key']}: {f['prompt_hint']}" for f in group['fields']
-    )
+    field_lines = []
+    for f in group['fields']:
+        override = get_field_override(f['key'])
+        allowed = override.get('allowed_values', [])
+        hint = f['prompt_hint']
+        if allowed:
+            hint += f" Value MUST be one of: {', '.join(allowed)}. Return null if not mentioned."
+        field_lines.append(f"- {f['key']}: {hint}")
+    field_list = "\n".join(field_lines)
     json_example = ",\n".join(
         f'  "{f["key"]}": {{"value": "...", "confidence": "high|medium|low", "reason": "...", "source_section": "(a)-(i) or null"}}'
         for f in group['fields']

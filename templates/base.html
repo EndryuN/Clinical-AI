@@ -20,6 +20,7 @@
                 <a class="nav-link" href="/review">Review</a>
                 <a class="nav-link" href="/analytics-page">Analytics</a>
                 <a class="btn btn-success btn-sm ms-2" href="/export">Export Excel</a>
+                <a class="btn btn-outline-info btn-sm ms-1" href="/export/consultation" title="Export field consultation sheet for doctor review">Consult</a>
                 <button class="btn btn-outline-danger btn-sm ms-2" onclick="if(confirm('Wipe all data and start over?')){fetch('/reset',{method:'POST'}).then(()=>window.location='/')}">Reset</button>
                 {% endif %}
                 <button id="theme-toggle" class="ms-2" onclick="toggleTheme()" title="Toggle light/dark mode">&#x263E;</button>

@@ -770,6 +770,42 @@ def export():
                      as_attachment=True)
 
 
+@app.route('/export/consultation')
+def export_consultation():
+    """Export consultation/groundtruth Excel for doctor review."""
+    if not session.patients:
+        return jsonify({"error": "No data to export"}), 400
+    from export.consultation_writer import write_consultation_excel
+    output_path = os.path.join(app.config['UPLOAD_FOLDER'], 'field_consultation.xlsx')
+    write_consultation_excel(session.patients, output_path)
+    log_event('export_consultation', patients=len(session.patients))
+    return send_file(output_path,
+                     download_name='field_consultation.xlsx',
+                     as_attachment=True)
+
+
+@app.route('/import/consultation', methods=['POST'])
+def import_consultation():
+    """Import doctor-filled consultation Excel to update field overrides."""
+    from export.consultation_writer import import_consultation_excel
+    from config import save_overrides, load_overrides
+    file = request.files.get('file')
+    if not file or not file.filename.endswith('.xlsx'):
+        return jsonify({"error": "Please upload a .xlsx file"}), 400
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+        file.save(tmp.name)
+        new_overrides = import_consultation_excel(tmp.name)
+    if not new_overrides:
+        return jsonify({"error": "No doctor overrides found in file"}), 400
+    # Merge with existing overrides
+    existing = load_overrides()
+    existing.update(new_overrides)
+    save_overrides(existing)
+    log_event('import_consultation', fields_updated=len(new_overrides))
+    return jsonify({"status": "ok", "fields_updated": len(new_overrides), "overrides": existing})
+
+
 @app.route('/analytics')
 def analytics_data():
     if not session.patients:

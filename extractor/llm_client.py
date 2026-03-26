@@ -20,7 +20,7 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 OLLAMA_URL = "http://localhost:11434"
 CLAUDE_URL = "https://api.anthropic.com/v1/messages"
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
-TIMEOUT = 120  # Per-call timeout in seconds (reduced from 300 — our prompts are small)
+TIMEOUT = 30  # Per-call timeout in seconds — our prompts are small and focused
 
 # Runtime state
 _backend = "claude" if ANTHROPIC_API_KEY else "ollama"

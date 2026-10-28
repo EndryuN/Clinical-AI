@@ -1,165 +1,115 @@
 # MDT Data Extractor
 
-A locally-hosted web application that extracts structured patient data from NHS Multidisciplinary Team (MDT) outcome proforma Word documents and outputs it as a standardised Excel spreadsheet.
+Reads the Word documents from cancer multidisciplinary team (MDT) meetings and fills the 88-column patient spreadsheet that clinicians otherwise fill in by hand. The language model runs on your own machine through Ollama, so patient data never has to leave it, and every value it extracts links back to the passage it came from so a clinician can check it.
 
-All processing happens on your machine. No data leaves the local environment.
+> **All data in this repository is synthetic.** The 50 MDT cases used to build and test the tool were written by the hackathon organisers, with dummy NHS numbers and shifted dates. No real patient data was used at any point. The spreadsheets in `extraction_results/` are this tool's output on those synthetic cases.
 
-## Features
+![Reviewing a synthetic patient: clicking a field highlights the passage it was read from](assets/review.png)
 
-- **DOCX Upload** — Drag-and-drop Word document upload with automatic patient detection
-- **Local LLM Extraction** — Uses Ollama (Qwen, Llama) or Claude API for zero data leakage
-- **Config-Driven** — `field_schema.yaml` defines all 88 fields across 16 clinical categories
-- **Confidence System** — Green (structured verbatim), Orange (freeform verbatim), Red (inferred) colour coding with full provenance tracking
-- **Field Provenance** — Every field links back to the exact source cell it came from
-- **Coverage Tracking** — Toggle to see unused text with percentage coverage badge
-- **G049 Clinical Reference** — RCPath G049 definitions (TNM, MMR, EMVI, CRM, TRG) injected into LLM prompts for clinical accuracy, with `[G049]` citation in reasoning
-- **Self-Contained Excel** — Single `.xlsx` with 3 sheets (data + metadata + raw cells) enables full review on any machine without DOCX or LLM
-- **Cross-Machine Workflow** — Extract on a powerful PC, review/edit on a laptop
-- **Human-in-the-Loop** — Clinicians review, edit, and re-export before clinical use
-- **Unique Patient IDs** — `{MDT_date}_{initials}_{gender}_{MRN/NHS}` format for reliable tracking
-- **Parallel Extraction** — 1-3 concurrent LLM workers with live progress monitoring
-- **Analytics Dashboard** — Charts for cancer types, treatments, and confidence distribution
-- **Audit Trail** — Every extraction and manual edit is logged
+*Reviewing a synthetic patient. Clicking `src` next to EMVI highlights the MDT outcome text the model read it from ("EMVI positive").*
 
-## Prerequisites
+## The problem
 
-- **Python 3.11+**
-- **Ollama** — https://ollama.com (or Anthropic API key for Claude)
+Cancer patients in the NHS are discussed at weekly MDT meetings. The case lists and outcomes are circulated as Word documents, and the hospital database they are meant to feed is filled in inconsistently, so researchers end up reading the notes and copying details into their own spreadsheets. The brief, set by an NHS consultant at a clinical AI hackathon in March 2026, asked whether those Word documents could fill a searchable spreadsheet automatically. The full brief is in [`hackathon-brief.md`](hackathon-brief.md).
 
-## Setup
+I built this solo during and after the hackathon.
 
-### 1. Install Ollama and pull a model
+## How it works
 
-```bash
-# Download and install Ollama from https://ollama.com
-# Then pull a model:
-ollama pull qwen3:8b              # Recommended: fast, good quality
-ollama pull qwen2.5:14b-instruct  # Higher quality, needs more RAM
-ollama pull qwen3.5:4b            # Lightweight option
+```mermaid
+flowchart LR
+    A[MDT .docx] --> B[Split into patients<br/>one table each]
+    B --> C[Pattern matching<br/>all 18 field groups]
+    B --> D[Local LLM<br/>4 free-text groups]
+    C --> E[Verbatim check<br/>and confidence colour]
+    D --> E
+    E --> F[Clinician review<br/>and edits]
+    F --> G[Excel export]
 ```
 
-### 2. Install Python dependencies
+1. **Parse.** Each patient in the document is one Word table. The parser splits the document into patients and removes the duplicate text Word produces for merged cells.
+2. **Pattern matching first.** Fields with a fixed format (dates, NHS and hospital numbers, TNM staging, gender) are read by regular expressions across all 18 field groups. No model is involved, so the same document always gives the same values.
+3. **The LLM only where it is needed.** The model handles four groups whose answers sit in free-text notes: Endoscopy, Baseline CT, Surgery, and Watch and Wait. For those, the model gets only the sections of the patient's notes that are relevant, which made prompts 50–63% smaller than sending the whole record. Each prompt carries worked examples and a clinical abbreviation list, the Baseline CT prompt adds TNM and EMVI definitions from the Royal College of Pathologists' G049 dataset, and the model must answer in JSON.
+4. **Check every answer against the source.** Each value the model returns is searched for in the original text, and every value keeps a pointer to the table cell it came from.
+5. **Review, then export.** A clinician reviews each patient side by side with the source document, edits anything wrong, and exports an Excel file.
+
+The first version, written on hackathon day, sent one prompt per field group (16 at the time) with the whole patient record. Moving every fixed-format field to pattern matching made it faster and took the model out of the fields it had no reason to touch.
+
+### Confidence colours
+
+| Badge | Colour | Meaning |
+|-------|--------|---------|
+| HIGH | Green | Read by pattern matching from a structured cell |
+| INFERRED | Orange | Read by the LLM from free text; the value appears word for word in the source |
+| LOW | Red | Returned by the LLM but not found word for word in the source, so check it first |
+| PENDING | Grey | Nothing found; fill in by hand if the document has it |
+
+An edited field is marked EDITED and keeps its original value in the export.
+
+### The Excel file
+
+The export has three sheets: the patient data in the column layout the organisers asked for, a hidden metadata sheet with each value's source cell, snippet and confidence, and a hidden copy of the raw table text. Because of the last two, the spreadsheet can be imported again on another machine and reviewed with full source highlighting, without the Word document or a model.
+
+## Results
+
+I ran all 50 synthetic patients through five models: four local ones through Ollama and Claude Haiku 4.5 through the API.
+
+| Model | Seconds per patient (mean) | All 50 patients | LLM values found word for word | LLM values not found |
+|-------|---------------------------:|----------------:|-------------------------------:|---------------------:|
+| Qwen3 8B | 23.9 | 20 min | 228 | 0 |
+| Llama 3.1 8B | 43.8 | 37 min | 215 | 2 |
+| Qwen3.5 4B | 44.6 | 37 min | 165 | 3 |
+| Qwen3 14B | 130.1 | 108 min | 169 | 0 |
+| Claude Haiku 4.5 (API) | 7.6 | 6 min | 161 | 2 |
+
+Qwen3 8B was the fastest local model and filled the most fields; the larger Qwen3 14B was more than five times slower and filled fewer. Per-patient figures are in [`extraction_results/benchmarks.xlsx`](extraction_results/benchmarks.xlsx), and each model's full output is next to it. Timings depend on the hardware.
+
+**What these numbers do not show is accuracy.** A value found word for word in the source can still sit in the wrong column. The organisers' target spreadsheet fills in only one example patient, so there is no ground truth for the other 49 yet; hand-labelling a sample and scoring each model against it is the next piece of work.
+
+## Running it
+
+You need Python 3.11+ and [Ollama](https://ollama.com).
 
 ```bash
+ollama pull qwen3:8b
 pip install -r requirements.txt
+python app.py              # http://localhost:5000; use --port 5001 if 5000 is taken
 ```
 
-### 3. Run the application
+On Windows, `run.bat` installs the requirements and starts the app.
+
+**To explore without a document or a model:** the hackathon's input document is not in this repository, but you can drag any spreadsheet from `extraction_results/` onto the start page. It opens in the review screen with every patient, colour and source highlight, because the export carries its own source text.
+
+**To extract:** drop an MDT outcome document in the same table format onto the start page and pick a model (the app starts on the lighter `qwen3.5:4b`; choose `qwen3:8b` from the list). On the next page set how many patients to process and press Start Extraction. A Stop button ends the run early.
+
+**Claude instead of Ollama:** put `ANTHROPIC_API_KEY=...` in a `.env` file and choose Claude on the start page. The text is then sent to Anthropic's API, so use this only with synthetic data.
+
+## Tests
 
 ```bash
-# Start Ollama
-ollama serve
-
-# In a separate terminal:
-python app.py
+python -m pytest tests/
 ```
 
-Open http://localhost:5000 in your browser.
+84 tests cover the parser, pattern matching, prompt building, response parsing and the verbatim check, coverage tracking, the Excel round trip and the schema. They do not call a model.
 
-### Claude API (optional)
-
-To use Claude instead of Ollama, set your API key:
-
-```bash
-set ANTHROPIC_API_KEY=sk-ant-...   # Windows
-export ANTHROPIC_API_KEY=sk-ant-...  # Linux/Mac
-python app.py
-```
-
-Switch between backends in the UI settings.
-
-## Usage Workflow
-
-### Extraction (powerful PC)
-1. **Upload** — Drag your `.docx` file onto the landing page
-2. **Configure** — Set patient limit and parallel workers (1-3)
-3. **Extract** — Watch live progress with per-patient timers and group tracking
-4. **Review** — Browse patients, check confidence colours, edit fields inline
-5. **Export** — Download the self-contained Excel file
-
-### Review (laptop, no DOCX needed)
-1. **Import** — Upload the Excel file on any machine
-2. **Preview** — Document previews regenerate from embedded raw cell data
-3. **Review** — Full confidence colours, source highlighting, coverage toggle
-4. **Edit & Re-export** — Make changes and export updated Excel
-
-## Confidence System
-
-| Colour | Basis | Meaning |
-|--------|-------|---------|
-| Green | `structured_verbatim` | Extracted by regex from a structured cell |
-| Orange | `freeform_verbatim` | LLM extracted, value exists verbatim in source text |
-| Red | `freeform_inferred` | LLM inferred — value not found verbatim in source |
-| Grey | `edited` | Clinician manually overrode the value |
-
-Every field tracks its `source_cell` (row/col), `source_snippet` (matched text), and `reason` (including `[G049]` citation when clinical reference was used).
-
-## Project Structure
+## Project layout
 
 ```
-Clinical AI/
-├── app.py                        # Flask app — routes, SSE progress, extraction
-├── models.py                     # FieldResult, PatientBlock, ExtractionSession
-├── audit.py                      # JSON audit trail
-├── config/
-│   ├── __init__.py               # Schema loaders
-│   └── field_schema.yaml         # 88 fields, 16 groups (single source of truth)
-├── parser/
-│   └── docx_parser.py            # DOCX parsing, cell dedup, patient splitting
-├── extractor/
-│   ├── regex_extractor.py        # Regex pass + unique_id assignment
-│   ├── llm_client.py             # Ollama / Claude API backend
-│   ├── prompt_builder.py         # Prompt construction with G049 injection
-│   ├── response_parser.py        # LLM JSON parsing + verbatim check
-│   ├── clinical_context.py       # G049 RCPath definitions
-│   ├── coverage.py               # Unused text tracking (span-union)
-│   └── preview_renderer.py       # Pillow PNG rendering
-├── export/
-│   └── excel_writer.py           # 3-sheet Excel (data + metadata + raw cells)
-├── static/
-│   ├── css/style.css             # Dark theme
-│   └── js/app.js                 # Frontend logic
-├── templates/                    # Jinja2 (index, process, review, analytics)
-├── tests/                        # 78 pytest tests
-├── docs/                         # Design specs and implementation plans
-└── G049-*.pdf                    # RCPath reference document
+app.py                  Flask routes, background extraction, live progress (server-sent events)
+parser/                 Word document to patients and table cells
+extractor/              pattern matching, prompts, LLM client, response parsing, coverage
+config/                 field_schema.yaml (88 fields, 18 groups), per-group prompts, field overrides
+export/                 Excel writer, plus a consultation sheet for clinicians to review field definitions
+templates/, static/     the review interface (Bootstrap, vanilla JavaScript, Chart.js)
+context/                the G049 dataset and the staging notes the prompts draw on
+extraction_results/     benchmark timings and each model's output on the synthetic cases
+tests/                  pytest suite
 ```
 
-## Tech Stack
+`WORKFLOW.md` walks through the whole application step by step, and `CLAUDE.md` describes the architecture in more detail.
 
-| Component | Technology |
-|-----------|-----------|
-| Backend | Python 3.11+ / Flask |
-| LLM | Ollama (Qwen, Llama) or Claude API |
-| DOCX Parsing | python-docx |
-| Excel | openpyxl |
-| Preview | Pillow |
-| Frontend | Bootstrap 5 (dark theme), vanilla JS, Chart.js |
-| Config | YAML |
-| Testing | pytest |
+## Limits
 
-## Clinical Safety
-
-- **Data Residency** — All data stays on localhost. No external API calls (unless Claude API is opted in).
-- **Human-in-the-Loop** — Clinician reviews all extractions before export.
-- **Provenance** — Every field traces back to its source cell and extraction method.
-- **G049 Citation** — LLM marks when clinical reference definitions drove a classification.
-- **Audit Trail** — Every extraction and edit logged with timestamps.
-- **Not a Medical Device** — This is a data extraction aid, not clinical decision support.
-
-## Running Tests
-
-```bash
-python -m pytest tests/ -v    # 78 tests
-```
-
-## Troubleshooting
-
-| Problem | Fix |
-|---------|-----|
-| "Cannot connect to Ollama" | Run `ollama serve` in a terminal |
-| "Model not found" | Run `ollama pull qwen3:8b` |
-| Extraction slow | Close other apps, check `ollama ps` for GPU. Try `qwen3.5:4b` for speed. |
-| 0 patients detected | Check document format matches MDT proforma structure |
-| Previews show old layout | Re-upload DOCX — previews are cached PNGs |
-| Port 5000 in use | `python app.py --port 5001` |
+- This is a hackathon prototype, not a medical device, and nothing it produces should be used for patient care without a clinician checking it.
+- It expects the hackathon's document layout: one table per patient with the same rows. Other MDT templates would need parser changes.
+- Accuracy has not been measured yet (see Results).
